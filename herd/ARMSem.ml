@@ -48,6 +48,30 @@ module
 
     let atomic_pair_allowed _ _ = true
 
+    let v2tgt =
+      let open Constant in
+      function
+      | M.A.V.Val(Label (_, lbl)) -> Some (B.Lbl lbl)
+      | M.A.V.Val (Concrete i) -> Some (B.Addr (M.A.V.Cst.Scalar.to_int i))
+      | _ -> None
+
+    let do_indirect_jump test bds i v =
+      match  v2tgt v with
+      | Some tgt -> M.unitT (B.Jump (tgt,bds))
+      | None ->
+         match v with
+         | M.A.V.Var(_) as v ->
+            let lbls = get_exported_labels test in
+            if Label.Full.Set.is_empty lbls then
+              Warn.fatal
+                "Could find no potential target for indirect branch %s \
+                 (potential targets are statically known labels)" (ARM.dump_instruction i)
+            else
+              B.indirectBranchT v lbls bds
+      | _ -> Warn.fatal
+          "illegal argument for the indirect branch instruction %s \
+           (must be a label)" (ARM.dump_instruction i)
+
 (********************)
 (* Semantics proper *)
 (********************)
@@ -136,7 +160,7 @@ module
       | ARM.SetFlags -> write_flag ARM.Z Op.Eq v1 v2 ii
       | ARM.DontSetFlags -> M.unitT ()
 
-      let build_semantics _ ii =
+      let build_semantics test ii =
         M.addT (A.next_po_index ii.A.program_order_index)
           begin match ii.A.inst with
           | ARM.I_NOP -> B.nextT
@@ -203,6 +227,9 @@ module
               read_reg_ord ARM.Z ii >>=
               fun v -> flip_flag v >>= fun vneg -> commit Act.Bcc ii >>=
                 fun () -> B.bccT vneg lbl
+          | ARM.I_BX r as i->
+            read_reg_ord r ii >>= do_indirect_jump test [] i
+
           | ARM.I_CB (n,r,lbl) ->
               let cond = if n then is_not_zero else is_zero in
               read_reg_ord r ii >>= cond >>=
@@ -283,6 +310,16 @@ module
           | ARM.I_MOVI (rt, i, c) ->
               let movi ii =  write_reg  rt (V.intToV i) ii in
               checkZ movi c ii
+          | ARM.I_MOVW (rt, k) ->
+              assert (MachSize.is_imm16 k);
+              let movi ii =  write_reg  rt (V.intToV k) ii in
+              checkZ movi ARM.AL ii
+          | ARM.I_MOVT (rt, k) ->
+              assert (MachSize.is_imm16 k);
+              let movi ii =
+                M.op1 (Op.LeftShift 16) (V.intToV k)
+                >>= fun k -> write_reg  rt k ii in
+              checkZ movi ARM.AL ii
           | ARM.I_XOR (set,r3,r1,r2) ->
               (((read_reg_ord  r1 ii) >>| (read_reg_ord r2 ii))
                  >>=
@@ -307,6 +344,7 @@ module
               Warn.user_error "SADD16 not implemented"
           | ARM.I_SEL _ ->
               Warn.user_error "SEL not implemented"
+
           end
 
       let spurious_setaf _ = assert false

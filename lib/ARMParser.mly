@@ -31,7 +31,7 @@ module A = ARMBase
 
 /* Instruction tokens */
 
-%token I_ADD I_ADDS I_SUB I_SUBS I_AND I_ANDS I_B I_BEQ I_BNE I_CMP I_MOV I_MOVNE I_MOVEQ I_XOR I_XORS I_DMB I_DSB I_ISB I_CBZ I_CBNZ
+%token I_ADD I_ADDS I_BX I_SUB I_SUBS I_AND I_ANDS I_B I_BEQ I_BNE I_CMP I_MOV I_MOVW I_MOVT I_MOVNE I_MOVEQ I_XOR I_XORS I_DMB I_DSB I_ISB I_CBZ I_CBNZ
 %token I_LDR I_LDREX I_LDRNE I_LDREQ I_STR I_STRNE I_STREQ I_STREX
 %token I_SY I_ST I_ISH I_ISHST I_NSH I_NSHST I_OSH I_OSHST
 %type <MiscParser.proc list * (ARMBase.parsedPseudo) list list> main
@@ -90,6 +90,8 @@ instr:
      { A.I_ADD3 (A.DontSetFlags,$2, $4, $6) }
   | I_ADDS reg COMMA reg COMMA reg
      { A.I_ADD3 (A.SetFlags,$2, $4, $6) }
+  | I_BX reg
+     { A.I_BX $2 }
   | I_SUB reg COMMA reg COMMA k
      { A.I_SUB (A.DontSetFlags,$2,$4,$6) }
   | I_SUBS reg COMMA reg COMMA k
@@ -173,6 +175,10 @@ instr:
      { A.I_MOV ($2,$4,A.NE) }
   | I_MOVEQ reg COMMA reg
      { A.I_MOV ($2,$4,A.EQ) }
+  | I_MOVW reg COMMA k
+     { A.I_MOVW ($2,$4)}
+  | I_MOVT reg COMMA k
+     { A.I_MOVT ($2,$4)}
   | I_XOR reg COMMA reg COMMA reg
      { A.I_XOR (A.DontSetFlags,$2,$4,$6) }
   | I_XORS reg COMMA reg COMMA reg

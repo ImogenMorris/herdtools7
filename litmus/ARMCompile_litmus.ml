@@ -79,6 +79,20 @@ module Make(V:Constant.S)(C:Config) =
         inputs = [] ;
         outputs = [r1]; cond=is_cond c; }
 
+    let movw r1 i =
+      let memo = "movw" in
+      { empty_ins with
+        memo = sprintf "%s ^o0,#%i" memo i ;
+        inputs = [] ;
+        outputs = [r1]; }
+
+    let movt r1 i =
+      let memo = "movt" in
+      { empty_ins with
+        memo = sprintf "%s ^o0,#%i" memo i ;
+        inputs = [] ;
+        outputs = [r1]; }
+
     let mov c r1 r2 =
       let memo = sprintf "%s%s" "mov" (pp_cond c) in
       { empty_ins with
@@ -149,6 +163,13 @@ module Make(V:Constant.S)(C:Config) =
       { empty_ins with
         memo = sprintf "b %s" (A.Out.dump_label (tr_lab lbl)) ;
         branch=[Branch lbl] ; }
+
+    let bx r =
+      { empty_ins with
+        memo = sprintf "bx ^i0" ;
+        inputs = [r] ;
+        outputs = [] ;
+        branch=[Next] ; }
 
     let bcc tr_lab cond lbl =
       { empty_ins with
@@ -222,6 +243,8 @@ module Make(V:Constant.S)(C:Config) =
     | I_XOR (s,r1, r2, r3) -> op3regs "eor" s AL r1 r2 r3::k
 (* Moves *)
     | I_MOVI (r, i, c) -> movi c r i::k
+    | I_MOVW (r, i) -> movw r i::k
+    | I_MOVT (r, i) -> movt r i::k
     | I_MOV (r1,r2, c) -> mov c r1 r2::k
 (* Memory *)
     | I_LDR (r1, r2, c) ->  ldr2 c r1 r2::k
@@ -234,6 +257,7 @@ module Make(V:Constant.S)(C:Config) =
     | I_CMPI (r1, i) -> cmpi r1 i::k
     | I_CMP (r1, r2)-> cmp r1 r2::k
     | I_B lbl -> b tr_lab lbl::k
+    | I_BX r -> bx r::k
     | I_BNE lbl -> bcc tr_lab NE lbl::k
     | I_BEQ lbl -> bcc tr_lab EQ lbl::k
     | I_CB (n,r,lbl) -> cb tr_lab n r lbl::k

@@ -86,7 +86,7 @@ let parse_list =
        regs)
 
 let parse_reg s =
-  try Some (List.assoc s parse_list)
+  try Some (List.assoc (String.uppercase s) parse_list)
   with Not_found -> None
 
 let pp_reg r = match r with
@@ -176,6 +176,7 @@ type 'k kinstruction =
   | I_NOP
   | I_ADD of setflags * reg * reg * 'k
   | I_ADD3 of setflags * reg * reg * reg
+  | I_BX of reg
   | I_SUB of setflags * reg * reg * 'k
   | I_SUB3 of setflags * reg * reg * reg
   | I_AND of setflags * reg * reg * 'k
@@ -193,6 +194,8 @@ type 'k kinstruction =
   | I_STREX of reg * reg * reg * condition
   | I_MOVI of reg * 'k * condition
   | I_MOV of reg * reg * condition
+  | I_MOVW of reg * 'k
+  | I_MOVT of reg * 'k
   | I_XOR of setflags * reg * reg * reg
   | I_DMB of barrier_option
   | I_DSB of barrier_option
@@ -268,6 +271,7 @@ let do_pp_instruction m =
       sprintf "CB%sZ" (if n then "N" else "") ^
       " " ^ pp_reg r ^ "," ^ pp_lbl lbl
   | I_CMPI (r,v) -> ppi_ri "CMP" r v
+  | I_BX r -> "BX " ^ (pp_reg r)
   | I_CMP (r1,r2) -> ppi_rr "CMP" r1 r2
   | I_LDREX(rt,rn) -> ppi_rrm "LDREX" rt rn
   | I_LDR(rt,rn,c) -> ppi_rrmc "LDR" rt rn c
@@ -277,6 +281,8 @@ let do_pp_instruction m =
   | I_STREX(rt,rn,rm,c) -> ppi_strex "STREX" rt rn rm c
   | I_MOVI(r,i,c) -> ppi_ric "MOV" r i c
   | I_MOV(r1,r2,c) -> ppi_rrc "MOV" r1 r2 c
+  | I_MOVW(r1,k) -> "MOVW " ^ (pp_reg r1) ^ ", " ^ (m.pp_k k)
+  | I_MOVT(r1,k) -> "MOVT " ^ (pp_reg r1) ^ ", " ^ (m.pp_k k)
   | I_XOR(s,r1,r2,r3) -> ppi_rrr "EOR" s r1 r2 r3
   | I_DMB o -> pp_barrier_ins "DMB" o
   | I_DSB o -> pp_barrier_ins "DSB" o
@@ -332,8 +338,10 @@ let fold_regs (f_reg,f_sreg) =
   | I_SADD16 (r1, r2, r3)
   | I_SEL (r1, r2, r3)
       -> fold_reg r3 (fold_reg r2 (fold_reg r1 c))
+  | I_BX r
   | I_CMPI (r, _)
   | I_MOVI (r, _, _)
+  | I_MOVW (r,_) | I_MOVT (r,_)
   | I_CB (_,r,_)
       -> fold_reg r c
   | I_NOP
@@ -364,6 +372,7 @@ let map_regs f_reg f_symb =
   | I_B _
   | I_BEQ _
   | I_BNE _ -> ins
+  | I_BX r -> I_BX (map_reg r)
   | I_CB (n,r,lbl) -> I_CB (n,map_reg r,lbl)
   | I_CMPI (r, k) -> I_CMPI (map_reg r, k)
   | I_CMP (r1, r2) -> I_CMP (map_reg r1, map_reg r2)
@@ -374,6 +383,8 @@ let map_regs f_reg f_symb =
   | I_STR3 (r1, r2, r3, c) -> I_STR3 (map_reg r1, map_reg r2, map_reg r3, c)
   | I_STREX (r1, r2, r3, c) -> I_STREX (map_reg r1, map_reg r2, map_reg r3, c)
   | I_MOVI (r, k, c) -> I_MOVI (map_reg r, k, c)
+  | I_MOVW (r, k) -> I_MOVW (map_reg r, k)
+  | I_MOVT (r, k) -> I_MOVT (map_reg r, k)
   | I_MOV (r1, r2, c) -> I_MOV (map_reg r1, map_reg r2, c)
   | I_XOR (s,r1, r2, r3) -> I_XOR (s,map_reg r1, map_reg r2, map_reg r3)
   | I_DMB _
@@ -409,6 +420,8 @@ let get_next = function
   | I_STR3 _
   | I_STREX _
   | I_MOVI _
+  | I_MOVW _
+  | I_MOVT _
   | I_MOV _
   | I_XOR _
   | I_DMB _
@@ -418,6 +431,7 @@ let get_next = function
   | I_SEL _
     -> [Label.Next]
   | I_B lbl -> [Label.To lbl]
+  | I_BX _ -> [Label.Any]
   | I_BEQ lbl|I_BNE lbl|I_CB (_,_,lbl) -> [Label.Next; Label.To lbl]
 
 include Pseudo.Make
@@ -430,8 +444,11 @@ include Pseudo.Make
         | I_ADD (c,r1,r2,k) ->  I_ADD (c,r1,r2,MetaConst.as_int k)
         | I_SUB (c,r1,r2,k) ->  I_SUB (c,r1,r2,MetaConst.as_int k)
         | I_AND (c,r1,r2,k) ->  I_AND (c,r1,r2,MetaConst.as_int k)
+        | I_BX r -> I_BX r
         | I_CMPI (r,k) -> I_CMPI (r,MetaConst.as_int k)
         | I_MOVI (r,k,c) -> I_MOVI (r,MetaConst.as_int k,c)
+        | I_MOVW (r,k) -> I_MOVW (r,MetaConst.as_int k)
+        | I_MOVT (r,k) -> I_MOVT (r,MetaConst.as_int k)
         | I_NOP
         | I_ADD3 _
         | I_SUB3 _
@@ -464,12 +481,15 @@ include Pseudo.Make
         | I_SUB3 _
         | I_AND _
         | I_B _
+        | I_BX _
         | I_BEQ _
         | I_BNE _
         | I_CB _
         | I_CMPI _
         | I_CMP _
         | I_MOVI _
+        | I_MOVW _
+        | I_MOVT _
         | I_MOV _
         | I_XOR _
         | I_DMB _
