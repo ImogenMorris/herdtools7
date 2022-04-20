@@ -28,6 +28,7 @@ let match_instr subs pattern instr = match pattern,instr with
         [Cst(m,i); Reg(sr_name r1,r1'); Reg(sr_name r2,r2')]
         subs
   | I_ADD(_,r1,r2,MetaConst.Int i),I_ADD(_,r1',r2',i')
+  | I_LDRO(r1,r2,MetaConst.Int i,_),I_LDRO(r1',r2',i',_)
   | I_SUB(_,r1,r2,MetaConst.Int i),I_SUB(_,r1',r2',i')
   | I_AND(_,r1,r2,MetaConst.Int i),I_AND(_,r1',r2',i') when i=i'->
       add_subs
@@ -151,6 +152,11 @@ let match_instr subs pattern instr = match pattern,instr with
           conv_reg r1 >> fun r1 ->
           conv_reg r2 >! fun r2 ->
           I_LDR(r1,r2,c)
+      | I_LDRO(r1,r2,v,c) ->
+          conv_reg r1 >>
+          fun r1 -> conv_reg r2 >>
+          fun r2 -> find_cst v >!
+          fun v -> I_LDRO(r1,r2,v,c)
       | I_STR(r1,r2,c) ->
           conv_reg r1 >> fun r1 ->
           conv_reg r2 >! fun r2 ->

@@ -125,6 +125,8 @@ instr:
      { A.I_LDR ($2,$5,A.AL) }
   | I_LDR reg COMMA LBRK reg COMMA reg RBRK
      { A.I_LDR3 ($2,$5,$7,A.AL) }
+  | I_LDR reg COMMA LBRK reg COMMA k RBRK
+     { A.I_LDRO ($2,$5,$7,A.AL) }
   | I_LDRNE reg COMMA reg
      { A.I_LDR ($2,$4,A.NE) }
   | I_LDRNE reg COMMA LBRK reg RBRK

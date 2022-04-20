@@ -254,6 +254,14 @@ module
                   (read_mem nat_sz vn ii) >>=
                   (fun v -> write_reg  rt v ii)) in
               checkZ ldr c ii
+          | ARM.I_LDRO (rd,rs,v,c) ->
+              let ldr ii =
+                read_reg_ord rs ii
+                  >>= (fun vn ->
+                    M.add vn (V.intToV v)
+                    >>= fun vn -> read_mem nat_sz vn ii
+                    >>= fun v -> write_reg rd v ii) in
+              checkZ ldr c ii
           |  ARM.I_LDREX (rt,rn) ->
               let ldr ii =
                 (read_reg_ord  rn ii)

@@ -188,6 +188,7 @@ type 'k kinstruction =
   | I_CMP of reg * reg
   | I_LDR of reg * reg * condition
   | I_LDREX of reg * reg
+  | I_LDRO of reg * reg * 'k * condition
   | I_LDR3 of reg * reg * reg * condition
   | I_STR of reg * reg * condition
   | I_STR3 of reg * reg * reg * condition
@@ -246,6 +247,10 @@ let do_pp_instruction m =
     pp_memoc opcode c^" "^pp_reg rt ^ ","^
     "[" ^ pp_reg ri ^ "," ^ pp_reg rn ^ "]" in
 
+  let ppi_rrkmc opcode rt ri k =
+    opcode ^" "^pp_reg rt ^ ","^
+    "[" ^ pp_reg ri ^ "," ^ m.pp_k k ^ "]" in
+
   let ppi_strex opcode rt rn rm c =
      pp_memoc opcode c^" "^pp_reg rt ^ ","^
     pp_reg rn ^ ",[" ^ pp_reg rm ^ "]" in
@@ -276,6 +281,7 @@ let do_pp_instruction m =
   | I_LDREX(rt,rn) -> ppi_rrm "LDREX" rt rn
   | I_LDR(rt,rn,c) -> ppi_rrmc "LDR" rt rn c
   | I_LDR3(rt,rn,rm,c) -> ppi_rrrmc "LDR" rt rn rm c
+  | I_LDRO(rt,rn,k,_) -> ppi_rrkmc "LDR" rt rn k
   | I_STR(rt,rn,c) -> ppi_rrmc "STR" rt rn c
   | I_STR3(rt,rn,rm,c) -> ppi_rrrmc "STR" rt rn rm c
   | I_STREX(rt,rn,rm,c) -> ppi_strex "STREX" rt rn rm c
@@ -325,6 +331,7 @@ let fold_regs (f_reg,f_sreg) =
   | I_AND (_,r1, r2, _)
   | I_LDR (r1, r2, _)
   | I_LDREX (r1, r2)
+  | I_LDRO (r1, r2,_,_)
   | I_STR (r1, r2, _)
   | I_MOV (r1, r2, _)
   | I_CMP (r1,r2)
@@ -377,6 +384,7 @@ let map_regs f_reg f_symb =
   | I_CMPI (r, k) -> I_CMPI (map_reg r, k)
   | I_CMP (r1, r2) -> I_CMP (map_reg r1, map_reg r2)
   | I_LDREX (r1, r2) -> I_LDREX (map_reg r1, map_reg r2)
+  | I_LDRO (r1, r2,k,c) -> I_LDRO (map_reg r1, map_reg r2,k,c)
   | I_LDR (r1, r2, c) -> I_LDR (map_reg r1, map_reg r2, c)
   | I_LDR3 (r1, r2, r3, c) -> I_LDR3 (map_reg r1, map_reg r2, map_reg r3, c)
   | I_STR (r1, r2, c) -> I_STR (map_reg r1, map_reg r2, c)
@@ -415,6 +423,7 @@ let get_next = function
   | I_CMP _
   | I_LDR _
   | I_LDREX _
+  | I_LDRO _
   | I_LDR3 _
   | I_STR _
   | I_STR3 _
@@ -444,6 +453,7 @@ include Pseudo.Make
         | I_ADD (c,r1,r2,k) ->  I_ADD (c,r1,r2,MetaConst.as_int k)
         | I_SUB (c,r1,r2,k) ->  I_SUB (c,r1,r2,MetaConst.as_int k)
         | I_AND (c,r1,r2,k) ->  I_AND (c,r1,r2,MetaConst.as_int k)
+        | I_LDRO (r1,r2,k,c) ->  I_LDRO (r1,r2,MetaConst.as_int k,c)
         | I_BX r -> I_BX r
         | I_CMPI (r,k) -> I_CMPI (r,MetaConst.as_int k)
         | I_MOVI (r,k,c) -> I_MOVI (r,MetaConst.as_int k,c)
@@ -500,6 +510,7 @@ include Pseudo.Make
           -> 0
         | I_LDR _
         | I_LDREX _
+        | I_LDRO _
         | I_LDR3 _
         | I_STR _
         | I_STR3 _

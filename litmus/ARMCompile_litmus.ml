@@ -109,6 +109,13 @@ module Make(V:Constant.S)(C:Config) =
         inputs = [r2] ;
         outputs = [r1] ; cond=is_cond c; }
 
+    let ldr2k c r1 r2 i =
+      let memo = sprintf "%s%s" "ldr" (pp_cond c) in
+      { empty_ins with
+        memo = sprintf "%s ^o0,[^i0, #%i]" memo i ;
+        inputs = [r2] ;
+        outputs = [r1] ; cond=is_cond c; }
+
     let ldrex r1 r2 =
       let memo = "ldrex" in
       { empty_ins with
@@ -248,6 +255,7 @@ module Make(V:Constant.S)(C:Config) =
     | I_MOV (r1,r2, c) -> mov c r1 r2::k
 (* Memory *)
     | I_LDR (r1, r2, c) ->  ldr2 c r1 r2::k
+    | I_LDRO (r1, r2, k1, c) ->  ldr2k c r1 r2 k1::k
     | I_LDREX (r1, r2) ->  ldrex r1 r2::k
     | I_LDR3 (r1, r2, r3, c) ->  ldr3 c r1 r2 r3::k
     | I_STR (r1, r2, c) ->  str2 c r1 r2::k
