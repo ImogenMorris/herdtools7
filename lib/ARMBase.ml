@@ -64,6 +64,7 @@ let regs =
    R10, "R10" ;
    R11, "R11" ;
    R12, "R12" ;
+   R12, "IP" ;
    SP, "SP" ;
    LR, "LR" ;
    PC, "PC" ;
