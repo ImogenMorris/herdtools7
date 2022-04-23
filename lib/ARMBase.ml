@@ -72,6 +72,23 @@ let regs =
    RESADDR, "RESADDR" ;
  ]
 
+(* this is used by instructions which load registers in pairs*)
+(* by specifying Rd1, and implicitly loading Rd2 - see LDRD  *)
+let next_reg = function
+  | R0 -> R1
+  | R1 -> R2 ;
+  | R2 -> R3 ;
+  | R3 -> R4 ;
+  | R4 -> R5 ;
+  | R5 -> R6 ;
+  | R6 -> R7 ;
+  | R7 -> R8 ;
+  | R8 -> R9 ;
+  | R9 -> R10 ;
+  | R10 -> R11 ;
+  | R11 -> R12 ;
+  | _ -> assert false
+
 let to_parse =
   List.filter
     (fun (r,_) -> match r with
@@ -194,6 +211,7 @@ type 'k kinstruction =
   | I_LDRO of reg * reg * 'k * condition
   | I_LDM2 of reg * reg * reg * increment
   | I_LDM3 of reg * reg * reg * reg * increment
+  | I_LDRD of reg * reg * reg * 'k option
   | I_LDR3 of reg * reg * reg * condition
   | I_STR of reg * reg * condition
   | I_STR3 of reg * reg * reg * condition
@@ -295,6 +313,10 @@ let do_pp_instruction m =
   | I_LDM2(rt,r1,r2,i) -> ppi_rr_multiple "LDM" rt [r1; r2] i
   | I_LDM3(rt,r1,r2,r3,i) -> ppi_rr_multiple "LDM" rt [r1;r2;r3] i
   | I_LDR(rt,rn,c) -> ppi_rrmc "LDR" rt rn c
+  | I_LDRD(rd1,rd2,rn,Some k) -> sprintf "LDRD %s, %s, [%s, %s]"
+      (pp_reg rd1) (pp_reg rd2) (pp_reg rn) (m.pp_k k)
+  | I_LDRD(rd1,rd2,rn,None) -> sprintf "LDRD %s, %s, [%s]"
+      (pp_reg rd1) (pp_reg rd2) (pp_reg rn)
   | I_LDR3(rt,rn,rm,c) -> ppi_rrrmc "LDR" rt rn rm c
   | I_LDRO(rt,rn,k,_) -> ppi_rrkmc "LDR" rt rn k
   | I_STR(rt,rn,c) -> ppi_rrmc "STR" rt rn c
@@ -352,6 +374,7 @@ let fold_regs (f_reg,f_sreg) =
   | I_CMP (r1,r2)
       -> fold_reg r2 (fold_reg r1 c)
   | I_LDR3 (r1, r2, r3, _)
+  | I_LDRD (r1, r2, r3, _)
   | I_LDM2 (r1, r2, r3,_)
   | I_ADD3 (_, r1, r2, r3)
   | I_SUB3 (_, r1, r2, r3)
@@ -405,6 +428,7 @@ let map_regs f_reg f_symb =
   | I_LDRO (r1, r2,k,c) -> I_LDRO (map_reg r1, map_reg r2,k,c)
   | I_LDR (r1, r2, c) -> I_LDR (map_reg r1, map_reg r2, c)
   | I_LDR3 (r1, r2, r3, c) -> I_LDR3 (map_reg r1, map_reg r2, map_reg r3, c)
+  | I_LDRD (r1, r2, r3, k) -> I_LDRD (map_reg r1, map_reg r2, map_reg r3, k)
   | I_LDM2 (r1,r2,r3,i) -> I_LDM2 (map_reg r1, map_reg r2, map_reg r3,i)
   | I_LDM3 (r1,r2,r3,r4,i) -> I_LDM3 (map_reg r1, map_reg r2, map_reg r3,map_reg r4, i)
   | I_STR (r1, r2, c) -> I_STR (map_reg r1, map_reg r2, c)
@@ -446,6 +470,7 @@ let get_next = function
   | I_LDM3 _
   | I_LDREX _
   | I_LDRO _
+  | I_LDRD _
   | I_LDR3 _
   | I_STR _
   | I_STR3 _
@@ -476,6 +501,8 @@ include Pseudo.Make
         | I_SUB (c,r1,r2,k) ->  I_SUB (c,r1,r2,MetaConst.as_int k)
         | I_AND (c,r1,r2,k) ->  I_AND (c,r1,r2,MetaConst.as_int k)
         | I_LDRO (r1,r2,k,c) ->  I_LDRO (r1,r2,MetaConst.as_int k,c)
+        | I_LDRD (r1,r2,r3,Some k) ->  I_LDRD (r1,r2,r3,Some (MetaConst.as_int k))
+        | I_LDRD (r1,r2,r3,None) ->  I_LDRD (r1,r2,r3,None)
         | I_BX r -> I_BX r
         | I_CMPI (r,k) -> I_CMPI (r,MetaConst.as_int k)
         | I_MOVI (r,k,c) -> I_MOVI (r,MetaConst.as_int k,c)
@@ -543,6 +570,8 @@ include Pseudo.Make
             -> 1
         | I_LDM3 _
             -> 3
+        | I_LDRD _
+            -> 2
 
 
       let fold_labels k f = function

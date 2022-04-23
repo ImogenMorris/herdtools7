@@ -127,6 +127,15 @@ module Make(V:Constant.S)(C:Config) =
         inputs = [ra] ;
         outputs = [r1;r2;r3] ; }
 
+    let ldrd r1 r2 r3 os =
+      let memo = "ldrd" in
+      let os = match os with | Some k -> sprintf ", #%i" k | _ -> "" in
+      { empty_ins with
+        memo = sprintf "%s ^o0, ^o0, [^o0%s]" memo os ;
+        inputs = [r3] ;
+        outputs = [r1;r2] ; }
+
+
     let ldr2k c r1 r2 i =
       let memo = sprintf "%s%s" "ldr" (pp_cond c) in
       { empty_ins with
@@ -275,6 +284,7 @@ module Make(V:Constant.S)(C:Config) =
     | I_LDR (r1, r2, c) ->  ldr2 c r1 r2::k
     | I_LDM2 (ra, r1, r2,i) ->  ldm2 ra r1 r2 i::k
     | I_LDM3 (ra, r1, r2, r3, i) ->  ldm3 ra r1 r2 r3 i::k
+    | I_LDRD (r1, r2, r3, os) ->  ldrd r1 r2 r3 os::k
     | I_LDRO (r1, r2, k1, c) ->  ldr2k c r1 r2 k1::k
     | I_LDREX (r1, r2) ->  ldrex r1 r2::k
     | I_LDR3 (r1, r2, r3, c) ->  ldr3 c r1 r2 r3::k

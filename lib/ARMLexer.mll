@@ -38,6 +38,7 @@ match name with
 | "cmp" | "CMP"   -> I_CMP
 | "ldr" | "LDR"   -> I_LDR
 | "ldm" | "LDM"   -> I_LDM
+| "ldrd" | "LDRD"   -> I_LDRD
 | "ldmib" | "LDMIB"   -> I_LDMIB
 | "ldrex" | "LDREX"   -> I_LDREX
 | "ldrne" | "LDRNE"   -> I_LDRNE

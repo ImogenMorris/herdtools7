@@ -49,6 +49,11 @@ let match_instr subs pattern instr = match pattern,instr with
       add_subs
         [Reg(sr_name r1,r1'); Reg(sr_name r2,r2'); Reg(sr_name r3,r3')]
         subs
+  | I_LDRD(r1,r2,r3,Some (MetaConst.Int k)),
+    I_LDRD(r1',r2',r3', Some k') when k = k' ->
+      add_subs
+        [Reg(sr_name r1,r1'); Reg(sr_name r2,r2'); Reg(sr_name r3,r3')]
+        subs
   | I_B l,I_B l'
   | I_BEQ l,I_BEQ l'
   | I_BNE l,I_BNE l' ->
@@ -177,6 +182,17 @@ let match_instr subs pattern instr = match pattern,instr with
           fun r1 -> conv_reg r2 >>
           fun r2 -> find_cst v >!
           fun v -> I_LDRO(r1,r2,v,c)
+      | I_LDRD(r1,r2,r3,Some v) ->
+          conv_reg r1 >> fun r1 ->
+          conv_reg r2 >> fun r2 ->
+          conv_reg r3 >> fun r3 ->
+          find_cst v >! fun v ->
+          I_LDRD(r1,r2,r3,Some v)
+      | I_LDRD(r1,r2,r3,None) ->
+          conv_reg r1 >> fun r1 ->
+          conv_reg r2 >> fun r2 ->
+          conv_reg r3 >! fun r3 ->
+          I_LDRD(r1,r2,r3,None)
       | I_STR(r1,r2,c) ->
           conv_reg r1 >> fun r1 ->
           conv_reg r2 >! fun r2 ->

@@ -254,6 +254,24 @@ module
                   (read_mem nat_sz vn ii) >>=
                   (fun v -> write_reg  rt v ii)) in
               checkZ ldr c ii
+          |  ARM.I_LDRD (rd1,rd2,ra, None) ->
+            read_reg_ord ra ii
+            >>= fun a ->
+              (read_mem nat_sz a ii) >>|
+              (M.add a (V.intToV 4) >>= fun a2->read_mem nat_sz a2 ii)
+            >>= fun (v1,v2) ->
+              write_reg rd1 v1 ii >>| write_reg rd2 v2 ii
+            >>= B.next2T
+          |  ARM.I_LDRD (rd1,rd2,ra, Some k) ->
+            read_reg_ord ra ii
+            >>= fun a ->
+              (M.add a (V.intToV k) >>= fun a->
+              ((read_mem nat_sz a ii) >>|
+              (M.add a (V.intToV 4) >>= fun a2->read_mem nat_sz a2 ii)))
+            >>= fun (v1,v2) ->
+              write_reg rd1 v1 ii >>| write_reg rd2 v2 ii
+            >>= B.next2T
+
           |  ARM.I_LDM2 (ra,r1,r2,i) ->
               (read_reg_ord ra ii)
                 >>=
