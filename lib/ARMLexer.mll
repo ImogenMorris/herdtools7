@@ -30,6 +30,7 @@ match name with
 | "sub" | "SUB"   -> I_SUB
 | "subs" | "SUBS" -> I_SUBS
 | "and" | "AND"   -> I_AND
+| "orr" | "ORR"   -> I_ORR
 | "ands" | "ANDS"   -> I_ANDS
 | "bne" | "BNE"   -> I_BNE
 | "beq" | "BEQ"   -> I_BEQ

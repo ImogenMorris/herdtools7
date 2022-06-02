@@ -219,6 +219,17 @@ module
                    >>|
                    write_flags set vres (V.intToV 0) ii))
                 >>= B.next2T
+          | ARM.I_ORR (set,rd,rs,v) ->
+              ((read_reg_ord  rs ii)
+                 >>=
+               (fun vs ->
+                 M.op Op.Or vs (V.intToV v))
+                 >>=
+               (fun vres ->
+                 write_reg  rd vres ii
+                   >>|
+                   write_flags set vres (V.intToV 0) ii))
+                >>= B.next2T
           | ARM.I_B lbl -> B.branchT lbl
           | ARM.I_BEQ (lbl) ->
               read_reg_ord ARM.Z ii >>=

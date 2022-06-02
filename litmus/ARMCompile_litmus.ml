@@ -270,6 +270,7 @@ module Make(V:Constant.S)(C:Config) =
     | I_ADD (s,r1, r2, i) ->  op2regsI "add" s AL r1 r2 i::k
     | I_SUB (s,r1, r2, i) ->  op2regsI "sub" s AL r1 r2 i::k
     | I_AND (s,r1, r2, i) ->  op2regsI "and" s AL r1 r2 i::k
+    | I_ORR (s,r1, r2, i) ->  op2regsI "orr" s AL r1 r2 i::k
     | I_ADD3 (s,r1, r2, r3) ->  op3regs "add" s AL r1 r2 r3::k
     | I_SADD16 (r1, r2, r3) ->  op3regs "sadd16" DontSetFlags AL r1 r2 r3::k
     | I_SEL (r1, r2, r3) ->  op3regs "sel" DontSetFlags AL r1 r2 r3::k

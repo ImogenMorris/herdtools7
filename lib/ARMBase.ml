@@ -200,6 +200,7 @@ type 'k kinstruction =
   | I_SUB of setflags * reg * reg * 'k
   | I_SUB3 of setflags * reg * reg * reg
   | I_AND of setflags * reg * reg * 'k
+  | I_ORR of setflags * reg * reg * 'k
   | I_B of lbl
   | I_BEQ of lbl
   | I_BNE of lbl (* Was maybeVal ??? *)
@@ -300,6 +301,7 @@ let do_pp_instruction m =
   | I_SUB(s,rt,rn,v) -> ppi_rri "SUB" s rt rn v
   | I_SUB3 (s,r1,r2,r3) -> ppi_rrr "SUB" s r1 r2 r3
   | I_AND(s,rt,rn,v) -> ppi_rri "AND" s rt rn v
+  | I_ORR(s,rt,rn,v) -> ppi_rri "ORR" s rt rn v
   | I_B v -> "B " ^ pp_lbl v
   | I_BEQ(v) -> "BEQ "^ pp_lbl v
   | I_BNE(v) -> "BNE "^ pp_lbl v
@@ -366,6 +368,7 @@ let fold_regs (f_reg,f_sreg) =
   | I_ADD (_,r1, r2, _)
   | I_SUB (_,r1, r2, _)
   | I_AND (_,r1, r2, _)
+  | I_ORR (_,r1, r2, _)
   | I_LDR (r1, r2, _)
   | I_LDREX (r1, r2)
   | I_LDRO (r1, r2,_,_)
@@ -416,6 +419,7 @@ let map_regs f_reg f_symb =
   | I_SUB (s,r1, r2, k) -> I_SUB (s,map_reg r1, map_reg r2, k)
   | I_SUB3 (s,r1, r2, r3) -> I_SUB3 (s,map_reg r1, map_reg r2, map_reg r3)
   | I_AND (s,r1, r2, k) -> I_AND (s,map_reg r1, map_reg r2, k)
+  | I_ORR (s,r1, r2, k) -> I_ORR (s,map_reg r1, map_reg r2, k)
   | I_NOP
   | I_B _
   | I_BEQ _
@@ -463,6 +467,7 @@ let get_next = function
   | I_SUB _
   | I_SUB3 _
   | I_AND _
+  | I_ORR _
   | I_CMPI _
   | I_CMP _
   | I_LDR _
@@ -500,6 +505,7 @@ include Pseudo.Make
         | I_ADD (c,r1,r2,k) ->  I_ADD (c,r1,r2,MetaConst.as_int k)
         | I_SUB (c,r1,r2,k) ->  I_SUB (c,r1,r2,MetaConst.as_int k)
         | I_AND (c,r1,r2,k) ->  I_AND (c,r1,r2,MetaConst.as_int k)
+        | I_ORR (c,r1,r2,k) ->  I_ORR (c,r1,r2,MetaConst.as_int k)
         | I_LDRO (r1,r2,k,c) ->  I_LDRO (r1,r2,MetaConst.as_int k,c)
         | I_LDRD (r1,r2,r3,Some k) ->  I_LDRD (r1,r2,r3,Some (MetaConst.as_int k))
         | I_LDRD (r1,r2,r3,None) ->  I_LDRD (r1,r2,r3,None)
@@ -541,6 +547,7 @@ include Pseudo.Make
         | I_SUB _
         | I_SUB3 _
         | I_AND _
+        | I_ORR _
         | I_B _
         | I_BX _
         | I_BEQ _
