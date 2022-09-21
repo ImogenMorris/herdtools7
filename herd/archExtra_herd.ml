@@ -818,12 +818,14 @@ module Make(C:Config) (I:I) : S with module I = I
       (* Scalars are always for the same effective type,
          (V.Cst.Scalar.t). For printing a scalar of "external"
          type t, the value itself is changed, masking for unsigned
-         types, sign extension for signed types *)
+         types, sign extension for signed types. For hexadecimal priniting,
+         all type behave as unsigned.
+       *)
 
       let cast_for_pp_with_base b sc =
         let sz = size_of_t b in
         if sz = I.V.Cst.Scalar.machsize then sc
-        else if TestType.is_signed b then I.V.Cst.Scalar.sxt sz sc
+        else if TestType.is_signed b && not C.hexa then I.V.Cst.Scalar.sxt sz sc
         else I.V.Cst.Scalar.mask sz sc
 
       let cast_for_pp_with_type t =
@@ -836,7 +838,7 @@ module Make(C:Config) (I:I) : S with module I = I
       let pp_typed t v =
         let max_unsigned =
            MachSize.equal (mem_access_size_of_t t) I.V.Cst.Scalar.machsize
-          && not (signed_of_t t) in
+          && (not (signed_of_t t) || C.hexa) in
         let v = I.V.map_scalar (cast_for_pp_with_type t) v in
         if max_unsigned then I.V.pp_unsigned C.hexa v
         else I.V.pp C.hexa v
