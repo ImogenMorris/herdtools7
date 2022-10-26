@@ -88,8 +88,9 @@ module type S =
   and iico_data for amo_strict.
 
   First bool argument <=> physical access.
+  Second bool argi,ent <=> identical registers (swp only)
 *)
-    val swp : bool -> ('loc t) ->
+    val swp : bool -> bool -> ('loc t) ->
       ('loc -> A.V.v t) -> A.V.v t (* read reg *) ->
         ('loc -> A.V.v -> unit t) ->  (A.V.v -> unit t) (* Write reg *)
           -> unit t

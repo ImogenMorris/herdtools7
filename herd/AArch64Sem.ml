@@ -1200,6 +1200,7 @@ module Make
         | RMW_A | RMW_AL -> A
 
       let swp sz rmw r1 r2 r3 ii =
+        let one_reg = r1=r2 in
         lift_memop Dir.W true (* swp is a write for the purpose of DB *)
           (fun ac ma mv ->
             let r2 = mv
@@ -1208,6 +1209,7 @@ module Make
             and w1 a v = rmw_amo_write sz rmw ac a v ii in
             M.swp
               (Access.is_physical ac)
+              (one_reg)
               ma
               r1 r2 w1 w2)
           (to_perms "rw" sz)

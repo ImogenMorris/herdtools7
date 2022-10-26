@@ -376,6 +376,7 @@ val same_instance : event -> event -> bool
 
   val swp_or_amo :
     bool -> (* Physical memory access *)
+    bool -> (* Acts on one register, relevenat when option below is None *)
     'op option -> (* When None this is a swp, otherwise amo *)
      event_structure -> event_structure ->
      event_structure -> event_structure ->
@@ -1502,7 +1503,7 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
   else (amo) add data dependency
   If physical and branching add dependencies *)
 
-    let swp_or_amo physical op rloc rmem rreg wmem wreg =
+    let swp_or_amo physical one_reg op rloc rmem rreg wmem wreg =
       let is_amo = Misc.is_some op in
       let outrmem = maximals rmem
       and outrreg = maximals rreg
@@ -1539,7 +1540,8 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
               rmem.intra_causality_control;rreg.intra_causality_control;
               wmem.intra_causality_control;wreg.intra_causality_control;];
            if is_amo then EventRel.empty else mem2mem;
-           EventRel.cartesian outrreg inwreg;
+           if one_reg then EventRel.cartesian outrreg inwreg
+           else EventRel.empty;
            if physical && is_branching then
  (* Notice similarity with data composition.  *)
              EventRel.cartesian (get_ctrl_output_commits rloc) inmem

@@ -307,9 +307,9 @@ Monad type:
 
 (* Exchange combination *)
 (* NB: first boolean -> physical memory access *)
-    let swp_or_amo : bool -> Op.op option -> ('loc t) ->
+    let swp_or_amo : bool -> bool -> Op.op option -> ('loc t) ->
       ('loc -> V.v t) -> V.v t -> ('loc -> V.v -> unit t) -> (V.v -> unit t)
-        -> unit t  = fun is_phy op rloc rmem rreg wmem wreg ->
+        -> unit t  = fun is_phy one_reg op rloc rmem rreg wmem wreg ->
           fun eiid ->
         let eiid,(locm,spec) = rloc eiid in
         assert (spec=None) ;
@@ -330,16 +330,17 @@ Monad type:
               let eiid,wreg = wreg w eiid in
               let (),vclwreg,eswreg = Evt.as_singleton_nospecul wreg in
               let es =
-                E.swp_or_amo is_phy op esloc esrmem esexp eswmem eswreg in
+                E.swp_or_amo is_phy one_reg op
+                  esloc esrmem esexp eswmem eswreg in
               let act = (),vlop (vlcloc@vclexp@vclrmem@vclwmem@vclwreg),es in
               eiid,Evt.add act acts)
             locm (eiid,Evt.empty) in
         eiid,(acts,None)
 
-    let swp is_phy rloc rmem rreg wmem wreg =
-      swp_or_amo is_phy None rloc rmem rreg wmem wreg
+    let swp is_phy one_reg rloc rmem rreg wmem wreg =
+      swp_or_amo is_phy one_reg None rloc rmem rreg wmem wreg
     let amo_strict is_phy op rloc rmem rreg wmem wreg =
-      swp_or_amo is_phy (Some op) rloc rmem rreg wmem wreg
+      swp_or_amo is_phy false (Some op) rloc rmem rreg wmem wreg
 
 (* linux exchange *)
     let linux_exch : 'loc t -> 'v t -> ('loc -> 'w t) -> ('loc -> 'v -> unit t) -> 'w t = fun rloc rexpr rmem wmem ->
