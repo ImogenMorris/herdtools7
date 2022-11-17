@@ -507,6 +507,7 @@ rule token = parse
 | '(' { LPAR }
 | ')' { RPAR }
 | ':' { COLON }
+| '.' (['+''-'] num as x) { DISP (int_of_string x) }
 | "scopes"  { SCOPES  }
 | "levels"  { LEVELS  }
 | "regions" { REGIONS }

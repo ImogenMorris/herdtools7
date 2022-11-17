@@ -4,7 +4,7 @@
 (* Jade Alglave, University College London, UK.                             *)
 (* Luc Maranget, INRIA Paris-Rocquencourt, France.                          *)
 (*                                                                          *)
-(* Copyright 2010-present Institut National de Recherche en Informatique et *)
+(* Copyright 2022-present Institut National de Recherche en Informatique et *)
 (* en Automatique and the authors. All rights reserved.                     *)
 (*                                                                          *)
 (* This software is governed by the CeCILL-B license under French law and   *)
@@ -14,46 +14,19 @@
 (* "http://www.cecill.info". We also give a copy in LICENSE.txt.            *)
 (****************************************************************************)
 
-open Printf
+(** (Relative) branch argument *)
 
-type t = string
+type t = Lab of Label.t | Off of int
 
-let pp = Misc.identity
+let pp = function
+| Lab lbl -> Label.pp lbl
+| Off n ->
+   if n < 0 then Printf.sprintf ".%d" n
+   else Printf.sprintf ".+%d" n
 
-let equal = String.equal
+let toNext =
+  let open Label in
+  function
+  | Lab l -> To l
+  | Off n -> Disp n
 
-let compare = String.compare
-
-let lab_count = ref 0
-
-let reset () = lab_count := 0
-
-let next_label s =
-  let x = !lab_count in
-  incr lab_count ;
-  sprintf "%s%02i" s x
-
-let last p = sprintf "End%i" p
-
-type next = Any | Next | To of t | Disp of int
-
-module Set = StringSet
-module Map = StringMap
-
-let norm lbls = try Some (Set.min_elt lbls) with Not_found -> None
-
-module Full =
-  struct
-    type full = Proc.t * t
-
-    let pp (p,lbl) = Printf.sprintf "%s:%s" (Proc.pp p) (pp lbl)
-    let equal = Misc.pair_eq Proc.equal equal
-    and compare = Misc.pair_compare Proc.compare compare
-
-    module Set =
-      MySet.Make
-        (struct
-          type t = full
-          let compare = compare
-        end)
-  end

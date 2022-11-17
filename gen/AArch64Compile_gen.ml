@@ -76,6 +76,7 @@ module Make(Cfg:Config) : XXXCompile_gen.S =
 (******************)
 (* Idiosyncrasies *)
 (******************)
+    let b_label lbl = I_B (BranchArg.Lab lbl)
 
     let vloc = let open TypBase in
       let sz = match Cfg.typ with
@@ -444,9 +445,9 @@ module Make(Cfg:Config) : XXXCompile_gen.S =
           let lab0 = Label.next_label "L" in
           let lab1 = Label.next_label "L" in
           let cs =
-            Label (lab,Instruction (I_B lab0))::
+            Label (lab,Instruction (b_label lab0))::
             Instruction (mov rA 2)::
-            Instruction (I_B lab1)::
+            Instruction (b_label lab1)::
             Label (lab0,Instruction (mov rA 1))::
             Label (lab1,Nop)::
             [] in

@@ -43,6 +43,7 @@ let check_op3 op kr =
 %token <string> META
 %token <string> CODEVAR
 %token <int> PROC
+%token <int> DISP
 
 %token SEMI COMMA PIPE COLON LCRL RCRL LBRK RBRK LPAR RPAR SCOPES LEVELS REGIONS
 %token SXTW
@@ -351,7 +352,8 @@ cond:
 | LT { A.LT }
 
 label_addr:
-| NAME      { $1 }
+| NAME  { BranchArg.Lab $1 }
+| DISP  { BranchArg.Off $1 }
 
 instr:
 | NOP { A.I_NOP }
@@ -367,10 +369,10 @@ instr:
 | ERET { A.I_ERET }
 | BEQ label_addr { A.I_BC (A.EQ,$2) }
 | BNE label_addr { A.I_BC (A.NE,$2) }
-| BLE NAME { A.I_BC (A.LE,$2) }
-| BLT NAME { A.I_BC (A.LT,$2) }
-| BGE NAME { A.I_BC (A.GE,$2) }
-| BGT NAME { A.I_BC (A.GT,$2) }
+| BLE label_addr { A.I_BC (A.LE,$2) }
+| BLT label_addr { A.I_BC (A.LT,$2) }
+| BGE label_addr { A.I_BC (A.GE,$2) }
+| BGT label_addr { A.I_BC (A.GT,$2) }
 | CBZ reg COMMA label_addr { let v,r = $2 in A.I_CBZ (v,r,$4) }
 | CBNZ reg COMMA label_addr { let v,r = $2 in A.I_CBNZ (v,r,$4) }
 | TBNZ reg COMMA NUM COMMA label_addr
@@ -984,7 +986,7 @@ instr:
   { A.I_MOVK (A.V32,$2,$4, A.S_NOEXT) }
 | MOVK wreg COMMA k COMMA LSL k
   { A.I_MOVK (A.V32,$2,$4, A.S_LSL $7) }
-| ADR xreg COMMA NAME
+| ADR xreg COMMA label_addr
   { A.I_ADR ($2,$4) }
 | SXTW xreg COMMA wreg
   { A.I_SXTW ($2,$4) }

@@ -25,10 +25,10 @@ val next_label : string -> t
 
 val last : int -> t
 
-type next = Any | Next | To of t
+type next = Any | Next | To of t | Disp of int
 
-module Set : MySet.S with type elt = string
-module Map : MyMap.S with type key = string
+module Set : MySet.S with type elt = t
+module Map : MyMap.S with type key = t
 
 val norm : Set.t -> t option
 

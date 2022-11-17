@@ -597,7 +597,7 @@ end
 (* Instructions *)
 (****************)
 
-type lbl = Label.t
+type lbl = BranchArg.t
 
 type condition = NE | EQ | GE | GT | LE | LT
 
@@ -872,7 +872,7 @@ type 'k kinstruction =
 type instruction = int kinstruction
 type parsedInstruction = MetaConst.k kinstruction
 
-let pp_label i = i
+let pp_label = BranchArg.pp
 
 open PPMode
 
@@ -1749,14 +1749,14 @@ let is_data _ _ = assert false
 
 (* Instruction continuation *)
 let get_next = function
-  | I_B lbl -> [Label.To lbl;]
+  | I_B lbl -> [BranchArg.toNext lbl;]
   | I_BC (_,lbl)
   | I_CBZ (_,_,lbl)
   | I_CBNZ (_,_,lbl)
   | I_TBNZ (_,_,_,lbl)
   | I_TBZ (_,_,_,lbl)
   | I_BL lbl
-    -> [Label.Next; Label.To lbl;]
+    -> [Label.Next; BranchArg.toNext lbl;]
   | I_BLR _|I_BR _|I_RET _ |I_ERET -> [Label.Any]
   | I_NOP
   | I_LDR _
@@ -2034,27 +2034,31 @@ include Pseudo.Make
              let n = get_simd_elements rs in
              rpt * selem * n
 
-      let fold_labels k f = function
-        | I_B lbl
-        | I_BC (_,lbl)
-        | I_CBZ (_,_,lbl)
-        | I_CBNZ (_,_,lbl)
-        | I_TBNZ (_,_,_,lbl)
-        | I_TBZ (_,_,_,lbl)
-        | I_BL lbl
-        | I_ADR (_,lbl)
+      let fold_labels k f =
+        let open BranchArg in
+        function
+        | I_B (Lab lbl)
+        | I_BL (Lab lbl)
+        | I_BC (_,Lab lbl)
+        | I_CBZ (_,_,Lab lbl)
+        | I_CBNZ (_,_,Lab lbl)
+        | I_TBNZ (_,_,_,Lab lbl)
+        | I_TBZ (_,_,_,Lab lbl)
+        | I_ADR (_,Lab lbl)
           -> f k lbl
         | _ -> k
 
-      let map_labels f = function
-        | I_B lbl -> I_B (f lbl)
-        | I_BL lbl -> I_BL (f lbl)
-        | I_BC (c,lbl) -> I_BC (c,f lbl)
-        | I_CBZ (v,r,lbl) -> I_CBZ (v,r,f lbl)
-        | I_CBNZ (v,r,lbl) -> I_CBNZ (v,r,f lbl)
-        | I_TBNZ (v,r,k,lbl) -> I_TBNZ (v,r,k,f lbl)
-        | I_TBZ (v,r,k,lbl) -> I_TBZ (v,r,k,f lbl)
-        | I_ADR (r,lbl) -> I_ADR (r, f lbl)
+      let map_labels f =
+        let open BranchArg in
+        function
+        | I_B (Lab lbl) -> I_B (Lab (f lbl))
+        | I_BL (Lab lbl) -> I_BL (Lab (f lbl))
+        | I_BC (c,Lab lbl) -> I_BC (c,Lab (f lbl))
+        | I_CBZ (v,r,Lab lbl) -> I_CBZ (v,r,Lab (f lbl))
+        | I_CBNZ (v,r,Lab lbl) -> I_CBNZ (v,r,Lab (f lbl))
+        | I_TBNZ (v,r,k,Lab lbl) -> I_TBNZ (v,r,k,Lab (f lbl))
+        | I_TBZ (v,r,k,Lab lbl) -> I_TBZ (v,r,k,Lab (f lbl))
+        | I_ADR (r,Lab lbl) -> I_ADR (r, Lab (f lbl))
         | ins -> ins
     end)
 
