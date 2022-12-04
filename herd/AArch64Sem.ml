@@ -2633,7 +2633,12 @@ module Make
           end
           >>= fun v -> write_reg_dest xt v ii
           >>= nextSet (SysReg sreg)
-(*  Cannot handle *)
+        | I_UDF _ ->
+           let (>>!) = M.(>>!) in
+           let ft = Some FaultType.AArch64.UndefinedInstruction in
+           let m_fault = mk_fault None Dir.R AArch64.N ii ft None in
+           m_fault >>| set_elr_el1 ii >>! B.Fault Dir.R
+        (*  Cannot handle *)
         | (I_RBIT _|I_LDP _|I_STP _
         (* | I_BL _|I_BLR _|I_BR _|I_RET _ *)
         | I_LD1M _|I_ST1M _) as i->
