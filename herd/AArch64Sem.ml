@@ -113,7 +113,9 @@ module Make
 
       let mk_fault a dir annot ii ft msg =
         let fh = has_handler ii in
-        M.mk_singleton_es (Act.Fault (ii,A.Location_global a,dir,annot,fh,ft,msg)) ii
+        let loc = Misc.map_opt (fun a -> A.Location_global a) a in
+        M.mk_singleton_es
+          (Act.Fault (ii,loc,dir,annot,fh,ft,msg)) ii
 
       let read_loc v is_data = M.read_loc is_data (mk_read v AArch64.N aexp)
 
@@ -571,7 +573,7 @@ module Make
         let open FaultType.AArch64 in
         let ft = Some (MMU Permission) in
         insert_commit_to_fault ma
-          (fun _ -> mk_fault a dir an ii ft (Some "EL0"))  ii >>! B.Exit
+          (fun _ -> mk_fault (Some a) dir an ii ft (Some "EL0"))  ii >>! B.Exit
 
       let an_xpte =
         let open AArch64 in
@@ -984,7 +986,8 @@ module Make
             let ft = Some FaultType.AArch64.TagCheck in
             delayed_check_tags a_virt (Some a_phy) ma ii
               (fun ma -> mm ma >>= M.ignore >>= B.next1T)
-              (lift_fault_memtag (mk_fault a_virt dir an ii ft None) mm dir ii))
+              (lift_fault_memtag
+                 (mk_fault (Some a_virt) dir an ii ft None) mm dir ii))
 
 
       let lift_memtag_virt mop ma dir an ii =
@@ -994,7 +997,8 @@ module Make
             let ft = Some FaultType.AArch64.TagCheck in
             delayed_check_tags a_virt None ma ii
               (fun ma -> mm ma >>= M.ignore >>= B.next1T)
-              (lift_fault_memtag (mk_fault a_virt dir an ii ft None) mm dir ii))
+              (lift_fault_memtag
+                 (mk_fault (Some a_virt) dir an ii ft None) mm dir ii))
 
 (* KVM mode *)
       let some_ha = dirty.DirtyBit.some_ha || dirty.DirtyBit.some_hd
@@ -1020,7 +1024,8 @@ module Make
 
       let lift_kvm dir updatedb mop ma an ii mphy =
         let mfault ma a ft =
-          insert_commit_to_fault ma (fun _ -> mk_fault a dir an ii ft None) ii >>|
+          insert_commit_to_fault ma
+            (fun _ -> mk_fault (Some a) dir an ii ft None) ii >>|
           set_elr_el1 ii >>! B.Fault dir in
         let maccess a ma =
           check_ptw ii.AArch64.proc dir updatedb a ma an ii
@@ -1041,7 +1046,8 @@ module Make
           let ft = None in (* FIXME *)
           do_insert_commit
             (ma >>| mv)
-            (fun (a,_v) -> mk_fault a dir an ii ft (Some msg)) ii  >>! B.Exit in
+            (fun (a,_v) ->
+              mk_fault (Some a) dir an ii ft (Some msg)) ii  >>! B.Exit in
         M.delay_kont "morello" ma
           (fun a ma ->
             (* Notice: virtual access only, beaause morello # kvm *)
@@ -2703,7 +2709,7 @@ module Make
                         let (>>!) = M.(>>!) in
                         let m_fault =
                           mk_fault
-                            a_v Dir.R AArch64.N ii
+                            None Dir.R AArch64.N ii
                             (Some FaultType.AArch64.IllegalInstruction)
                             (Some "Invalid") in
                         commit_pred ii
