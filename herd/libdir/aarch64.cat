@@ -110,6 +110,10 @@ irreflexive [W & Exp & T]; po-loc; [R & Imp & T]; (ca & int) as coWR-MTE
 (* Atomic: LDXR/STXR, AMO and HU constraint to forbid intervening writes. *)
 empty (rmw & (fr; co)) \ (([Exp]; rmw; [Exp]) & (fri ; [W & Exp]; coi)) as atomic
 
+(* Some instructions performe several _ordered_ memory accesses *)
+let iico = iico_order | iico_ctrl | iico_data
+acyclic iico | rf | ca as order-iico-memory
+
 (* Break Before Make *)
 let BBM = ([PTEV]; ca; [PTEINV]; co; [PTEV])
 flag ~empty (PTE-update-needsBBM & ~BBM) as requires-BBM
