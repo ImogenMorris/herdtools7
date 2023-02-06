@@ -19,27 +19,55 @@
     let debug = Conf.debug.Debug_herd.lexer
   end
   module ArchConfig = SemExtra.ConfigToArchConfig(Conf)
-  module CValue = Int32Value.Make(CBase.Instr)
-  module C = CArch_herd.Make(ArchConfig)(CValue)
-  module CLexParse = struct
-    (* Parsing *)
-    type pseudo = C.pseudo
-    type token = CParser.token
-    module Lexer = CLexer.Make(LexConfig)
-    let shallow_lexer = Lexer.token false
-    let deep_lexer = Lexer.token true
-    let shallow_parser = CParser.shallow_main
-    let deep_parser = CParser.deep_main
+  let run =
+    if Conf.variant Variant.S128 then
+      let module ConfMorello = struct
+        include CBase.Instr
+      end in
+      let module CValue = Int128Value.Make(ConfMorello) in
+      let module CS = CSem.Make(Conf)(CValue) in
+      let module CM = CMem.Make(ModelConfig)(CS) in
+      let module C = CArch_herd.Make(ArchConfig)(CValue) in
+      let module CLexParse = struct
+        (* Parsing *)
+        type pseudo = C.pseudo
+        type token = CParser.token
+        module Lexer = CLexer.Make(LexConfig)
+        let shallow_lexer = Lexer.token false
+        let deep_lexer = Lexer.token true
+        let shallow_parser = CParser.shallow_main
+        let deep_parser = CParser.deep_main
 
-    (* Macros *)
-    type macro = C.macro
-    let macros_parser = CParser.macros
-    let macros_expand = CBase.expand
-  end
-  module CS = CSem.Make(Conf)(CValue)
-  module CM = CMem.Make(ModelConfig)(CS)
-  module P = CGenParser_lib.Make (Conf) (C) (CLexParse)
-  module X = RunTest.Make (CS) (P) (CM) (Conf)
-  let run = X.run
+        (* Macros *)
+        type macro = C.macro
+        let macros_parser = CParser.macros
+        let macros_expand = CBase.expand
+      end in
+      let module P = CGenParser_lib.Make (Conf) (C) (CLexParse) in
+      let module X = RunTest.Make (CS) (P) (CM) (Conf) in
+      X.run
+    else
+      let module CValue = Int32Value.Make(CBase.Instr) in
+      let module CS = CSem.Make(Conf)(CValue) in
+      let module CM = CMem.Make(ModelConfig)(CS) in
+      let module C = CArch_herd.Make(ArchConfig)(CValue) in
+      let module CLexParse = struct
+        (* Parsing *)
+        type pseudo = C.pseudo
+        type token = CParser.token
+        module Lexer = CLexer.Make(LexConfig)
+        let shallow_lexer = Lexer.token false
+        let deep_lexer = Lexer.token true
+        let shallow_parser = CParser.shallow_main
+        let deep_parser = CParser.deep_main
+
+        (* Macros *)
+        type macro = C.macro
+        let macros_parser = CParser.macros
+        let macros_expand = CBase.expand
+      end in
+      let module P = CGenParser_lib.Make (Conf) (C) (CLexParse) in
+      let module X = RunTest.Make (CS) (P) (CM) (Conf) in
+      X.run
 end
 
