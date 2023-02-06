@@ -71,8 +71,8 @@ let fmt10 = function
   | "uint32_t" -> Some (Macro  "PRIu32")
   | "int64_t" -> Some (Macro  "PRIi64")
   | "uint64_t" -> Some (Macro  "PRIu64")
-  | "int128_t" | "__int128_t" -> Some (Macro  "PRIi128")
-  | "uint128_t" | "__uint128_t" -> Some (Macro  "PRIu128")
+  | "int128_t" | "__int128_t" -> Some (Direct "llx")
+  | "uint128_t" | "__uint128_t" -> Some (Direct "llx")
   | "intprt_t" -> Some (Macro "PRIiPTR")
   | "uintprt_t" -> Some (Macro "PRIuPTR")
   | _ -> None
