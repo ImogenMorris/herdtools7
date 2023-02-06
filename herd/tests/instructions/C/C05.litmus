@@ -2,10 +2,10 @@ C C05
 Variant=S128
 
 {
-int128_t x=1;
+__int128_t x=1;
 }
 
-P0 (int128_t *x) {
+P0 (__int128_t *x) {
  *x = 0;
 }
 
