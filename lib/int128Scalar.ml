@@ -28,19 +28,17 @@ let pp hexa v =
   Printf.sprintf "%s" (if hexa then (Int128.to_string_hex v) else (Int128.to_string v))
 let pp_unsigned = pp (* Hum *)
 
-let int8_max_int  = 0x00000088
-let int16_max_int = 0x00008888
-
 let lt v1 v2 = compare v1 v2 < 0
 let le v1 v2 = compare v1 v2 <= 0
 let bit_at k v = Int128.logand v (Int128.shift_left Int128.one k)
+
 let mask sz =
   let open MachSize in
   match sz with
-  | Byte -> fun v -> Int128.logand v (Int128.of_int8 int8_max_int)
-  | Short -> fun v -> Int128.logand v (Int128.of_int16 int16_max_int)
-  | Word -> fun v ->  Int128.logand v (Int128.of_int32 Int32.max_int)
-  | Quad -> fun v -> Int128.logand v (Int128.of_int64 Int64.max_int)
+  | Byte -> fun v -> Int128.logand v (Int128.of_int 0xff)
+  | Short -> fun v -> Int128.logand v (Int128.of_int 0xffff)
+  | Word -> fun v ->  Int128.logand v (Int128.of_int64 0xffffffffL)
+  | Quad -> fun v -> Int128.logand v (Int128.of_int64 BaseUint64.max_int)
   | S128 -> fun v -> v
 
 let sxt sz v = match sz with
