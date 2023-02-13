@@ -19,16 +19,12 @@
     let debug = Conf.debug.Debug_herd.lexer
   end
   module ArchConfig = SemExtra.ConfigToArchConfig(Conf)
-  let run =
-    if Conf.variant Variant.S128 then
-      let module ConfMorello = struct
-        include CBase.Instr
-      end in
-      let module CValue = Int128Value.Make(ConfMorello) in
-      let module CS = CSem.Make(Conf)(CValue) in
-      let module CM = CMem.Make(ModelConfig)(CS) in
-      let module C = CArch_herd.Make(ArchConfig)(CValue) in
-      let module CLexParse = struct
+
+  module MakeRun (CValue:Value.S with module Cst.Instr=CBase.Instr) = struct
+      module CS = CSem.Make(Conf)(CValue)
+      module CM = CMem.Make(ModelConfig)(CS)
+      module C = CArch_herd.Make(ArchConfig)(CValue)
+      module CLexParse = struct
         (* Parsing *)
         type pseudo = C.pseudo
         type token = CParser.token
@@ -42,32 +38,19 @@
         type macro = C.macro
         let macros_parser = CParser.macros
         let macros_expand = CBase.expand
-      end in
-      let module P = CGenParser_lib.Make (Conf) (C) (CLexParse) in
-      let module X = RunTest.Make (CS) (P) (CM) (Conf) in
-      X.run
-    else
-      let module CValue = Int32Value.Make(CBase.Instr) in
-      let module CS = CSem.Make(Conf)(CValue) in
-      let module CM = CMem.Make(ModelConfig)(CS) in
-      let module C = CArch_herd.Make(ArchConfig)(CValue) in
-      let module CLexParse = struct
-        (* Parsing *)
-        type pseudo = C.pseudo
-        type token = CParser.token
-        module Lexer = CLexer.Make(LexConfig)
-        let shallow_lexer = Lexer.token false
-        let deep_lexer = Lexer.token true
-        let shallow_parser = CParser.shallow_main
-        let deep_parser = CParser.deep_main
+      end
+      module P = CGenParser_lib.Make (Conf) (C) (CLexParse)
+      module X = RunTest.Make (CS) (P) (CM) (Conf)
+  end     
 
-        (* Macros *)
-        type macro = C.macro
-        let macros_parser = CParser.macros
-        let macros_expand = CBase.expand
-      end in
-      let module P = CGenParser_lib.Make (Conf) (C) (CLexParse) in
-      let module X = RunTest.Make (CS) (P) (CM) (Conf) in
-      X.run
+   let run =
+     if Conf.variant Variant.S128 then
+       let module CValue = Int128Value.Make(CBase.Instr) in
+       let module Run = MakeRun(CValue) in
+       Run.X.run
+     else
+       let module CValue = Int32Value.Make(CBase.Instr) in
+       let module Run = MakeRun(CValue) in
+       Run.X.run
 end
 
