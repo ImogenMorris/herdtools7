@@ -79,6 +79,12 @@ type t =
   | ASLVersion of [ `ASLv0 | `ASLv1 ]
 (* Signed Int128 types *)
   | S128
+(* Switch Mops default A/B option *)
+  | SwitchMops
+(* Switch Mops default Direction for CPY *)
+  | SwitchMopsDir
+(* Mops tranfer step size *)
+  | MopsSize of MachSize.sz
 
 val compare : t -> t -> int
 val equal : t -> t -> bool
@@ -93,3 +99,4 @@ val get_default :  Archs.t -> t -> bool
 val get_switch : Archs.t -> t -> (t -> bool) -> bool
 
 val set_precision : Precision.t ref -> t -> bool
+val set_mops_size : MachSize.sz ref -> t -> bool

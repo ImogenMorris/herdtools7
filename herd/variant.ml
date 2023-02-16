@@ -81,7 +81,12 @@ type t =
   | ASLVersion of [ `ASLv0 | `ASLv1 ]
 (* Signed Int128 types *)
   | S128
-
+(* Switch Mops default A/B option *)
+  | SwitchMops
+(* Switch Mops default Direction for CPY *)
+  | SwitchMopsDir
+(* Mops tranfer size *)
+  | MopsSize of MachSize.sz
 
 let tags =
   ["success";"instr";"specialx0";"normw";"acqrelasfence";"backcompat";
@@ -90,7 +95,9 @@ let tags =
     Precision.tags @
    ["toofar"; "deps"; "morello"; "instances"; "noptebranch"; "pte2";
    "pte-squared"; "PhantomOnLoad"; "OptRfRMW"; "ConstrainedUnpredictable";
-   "exp"; "self"; "cos-opt"; "test"; "T[0-9][0-9]"; "asl"; "S128"]
+   "exp"; "self"; "cos-opt"; "test"; "T[0-9][0-9]"; "asl"; "S128";
+    "SwitchMops"; "SwitchMopsDir"; "ByteMops"; "ShortMops"; "WordMops";
+    "QuadMops";]
 
 let parse s = match Misc.lowercase s with
 | "success" -> Some Success
@@ -134,6 +141,12 @@ let parse s = match Misc.lowercase s with
 | "aslv0" | "asl0" | "asl_0" -> Some (ASLVersion `ASLv0)
 | "aslv1" | "asl1" | "asl_1" -> Some (ASLVersion `ASLv1)
 | "s128" -> Some S128
+| "switchmops" -> Some SwitchMops
+| "switchmopsdir" -> Some SwitchMopsDir
+| "bytemops" -> Some (MopsSize MachSize.Byte)
+| "shortmops" -> Some (MopsSize MachSize.Short)
+| "wordmops" -> Some  (MopsSize MachSize.Word)
+| "quadmops" -> Some  (MopsSize MachSize.Quad)
 | s ->
    begin
      match Precision.parse s with
@@ -150,7 +163,8 @@ let parse s = match Misc.lowercase s with
         else None
    end
 
-let pp = function
+let pp =
+  function
   | Success -> "success"
   | Instr -> "instr"
   | SpecialX0 -> "specialx0"
@@ -193,6 +207,14 @@ let pp = function
   | ASLVersion `ASLv0 -> "ASLv0"
   | ASLVersion `ASLv1 -> "ASLv1"
   | S128 -> "S128"
+  | SwitchMops -> "SwitchMops"
+  | SwitchMopsDir -> "SwitchMopsDir"
+  | MopsSize MachSize.Byte -> "ByteMops"
+  | MopsSize MachSize.Short -> "ShortMops"
+  | MopsSize MachSize.Word -> "WordMops"
+  | MopsSize MachSize.Quad -> "QuadMops"
+  | MopsSize MachSize.S128 -> assert false
+
 
 let compare = compare
 let equal v1 v2 = compare v1 v2 = 0
@@ -218,4 +240,8 @@ let get_switch a v f =
 
 let set_precision r tag = match tag with
   | TagPrecise p -> r := p ; true
+  | _ -> false
+
+let set_mops_size r tag = match tag with
+  | MopsSize sz -> r := sz ; true
   | _ -> false
