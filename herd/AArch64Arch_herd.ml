@@ -196,6 +196,14 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
     | _ -> assert false (* Unsupported arrangement specifier *)
 
     let mem_access_size = function
+      | I_CPYF ((Prologue|Epilogue),_,_,_)
+      | I_CPY ((Prologue|Epilogue),_,_,_)
+      | I_SET ((Prologue|Epilogue),_,_,_)
+        -> Some MachSize.Byte (* At worst... *)
+      | I_CPYF (Main,_,_,_)
+      | I_CPY (Main,_,_,_)
+      | I_SET (Main,_,_,_)
+        -> Some C.mops_size
       | I_LDPSW _ -> Some (tr_variant V32)
       | I_LDR (v,_,_,_,_) | I_LDP (_,v,_,_,_,_,_) | I_LDXP (v,_,_,_,_)
       | I_LDUR (v,_,_,_)  | I_LDR_P(v,_,_,_)
@@ -290,9 +298,12 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
         -> [r]
       | I_MSR (sr,_)
         -> [(SysReg sr)]
-      | I_LDR_P (_,r1,r2,_)
-      | I_LDXP (_,_,r1,r2,_)
+      | I_LDR_P (_,r1,r2,_) | I_LDXP (_,_,r1,r2,_)
+      | I_SET (_,r1,r2,_)
         -> [r1;r2;]
+      | I_CPYF (_,r1,r2,r3)
+      | I_CPY (_,r1,r2,r3)
+        -> [r1;r2;r3;]
       | I_LD1 _|I_LD1M _|I_LD1R _|I_LD2 _
       | I_LD2M _|I_LD2R _|I_LD3 _|I_LD3M _
       | I_LD3R _|I_LD4 _|I_LD4M _|I_LD4R _
@@ -352,7 +363,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_MOV _|I_MOVZ _|I_MOVK _|I_SXTW _
       | I_OP3 _|I_ADR _|I_RBIT _|I_FENCE _
       | I_CSEL _|I_IC _|I_DC _|I_TLBI _|I_MRS _|I_MSR _
-      | I_STG _|I_STZG _|I_LDG _|I_UDF _
+      | I_UDF _|I_STG _|I_STZG _|I_LDG _|I_CPYF _|I_CPY _|I_SET _
         -> MachSize.No
 
     include ArchExtra_herd.Make(C)

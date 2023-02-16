@@ -753,7 +753,12 @@ let match_reg_events es =
                           S.Store ew
                         else begin
                           (* store order is total *)
-                          assert (U.is_before_strict es ew ew0) ;
+                          if not (U.is_before_strict es ew ew0) then begin
+                            Printf.eprintf
+                              "Writes %a and %a are not ordered!\n"
+                              E.debug_event ew0 E.debug_event ew ;
+                            assert false
+                          end ;
                           rf
                         end
                   else rf)

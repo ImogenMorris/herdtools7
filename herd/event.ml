@@ -316,6 +316,14 @@ val same_instance : event -> event -> bool
   val para_input_right :
     event_structure -> event_structure -> event_structure option
 
+(* Output limited to first argument *)
+  val para_output_left :
+    event_structure -> event_structure -> event_structure option
+
+(* Pure sequence, order composition *)
+  val seq_order :
+    event_structure -> event_structure -> event_structure option
+
 (***********************************************)
 (* sequential composition, add data dependency *)
 (***********************************************)
@@ -1263,6 +1271,15 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
          } in
        Some r
 
+    let para_output_left es1 es2 =
+      let r = union es1 es2 in
+      let r =
+         { r with
+           output = Some (get_output es1) ;
+           ctrl_output = Some (get_ctrl_output es1) ;
+         } in
+       Some r
+
 (* Composition with intra_causality_data from first to second *)
     let do_seq_input access es1 es2 =
       if is_empty_event_structure  es1 then access es2
@@ -1299,6 +1316,20 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
         output = mkOut es1 es2 ;
         ctrl_output = sequence_data_ctrl_output es1 es2 ;
       }
+
+    let seq_order es1 es2 =
+      let r = union es1 es2 in
+      let r =
+        { r with
+          intra_causality_order =
+            EventRel.union r.intra_causality_order
+              (EventRel.cartesian (get_output es1) (get_dinput es2));
+          input = seq_input es1 es2 ;
+          data_input = seq_data_input es1 es2 ;
+          output = sequence_data_output es1 es2 ;
+          ctrl_output = sequence_data_ctrl_output es1 es2 ;
+        } in
+      Some r
 
     let (=*$=) =
       check_disjoint (data_comp minimals_data sequence_data_output)

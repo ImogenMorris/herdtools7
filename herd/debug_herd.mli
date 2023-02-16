@@ -29,7 +29,8 @@ type t = {
   mixed : bool ;
   files : bool ;
   timeout : bool ;
-  }
+  mops : bool ;
+}
 
 val none : t
 val tags : string list

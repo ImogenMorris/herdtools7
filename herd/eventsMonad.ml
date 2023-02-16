@@ -201,7 +201,7 @@ Monad type:
       let sact = set_stds sact
       and sspec = Misc.map_opt set_stds sspec in
       eiid,(sact,sspec)
-      
+
     let (=**=) = E.(=**=)
     let (=*$=) = E.(=*$=)
     let (=$$=) = E.(=$$=)
@@ -345,6 +345,49 @@ Monad type:
               v,cls,{ es with E.intra_causality_data=data; })
             acts in
         eiid,(acts,specs)
+
+(* Remove some iico edges *)
+    let set_data es r = { es with E.intra_causality_data=r; }
+    let get_data es = es.E.intra_causality_data
+
+    let set_control es r = { es with E.intra_causality_control=r; }
+    let get_control es = es.E.intra_causality_control
+
+    let map_some_iico get set f m =
+      fun eiid ->
+        let eiid,(acts,specs) = m eiid in
+        let acts =
+          Evt.map
+            (fun (v,cls,es) ->
+              let rel = get es in
+              let rel = f rel in
+              v,cls,set es rel)
+            acts in
+        eiid,(acts,specs)
+
+
+    let filter_not_rel p = E.EventRel.filter (fun (e1,e2) -> not (p e1 e2))
+
+    let remove_control p m =
+      map_some_iico get_control set_control (filter_not_rel p) m
+
+    and remove_data p m =
+      map_some_iico get_data set_data (filter_not_rel p) m
+
+    let add_iico get set p m =
+      fun eiid ->
+        let eiid,(acts,specs) = m eiid in
+        let acts =
+          Evt.map
+            (fun (v,cls,es) ->
+              let evts = es.E.events in
+              let to_add = E.EventRel.of_pred evts evts p in
+              let es = set es (E.EventRel.union to_add (get es)) in
+              v,cls,es)
+            acts in
+        eiid,(acts,specs)
+
+    let add_data p m = add_iico get_data set_data p m
 
 (* Exchange combination *)
     let exch : 'a t -> 'a t -> ('a -> 'b t) ->  ('a -> 'c t) ->  ('b * 'c) t
@@ -730,12 +773,19 @@ Monad type:
 
     let para_input_right s1 s2 = combi Misc.pair E.para_input_right s1 s2
 
+    let para_output_left s1 s2 =
+      combi (fun r _ -> r) E.para_output_left s1 s2
+
+
     let (>>::) : 'a t -> 'a list t -> 'a list  t
         = fun s1 s2 -> combi (Misc.cons) (fun es1 es2 -> es1 =|= es2) s1 s2
 
 (* Parallel composition no result *)
     let (|||) : unit t -> unit t -> unit t
       = fun  s1 s2 -> combi (fun _ _ -> ()) (=|=) s1 s2
+
+(* Pure sequence *)
+    let seq  s1 s2 =  combi (fun _ r -> r) E.seq_order s1 s2
 
 (* Force monad value *)
     let forceT : 'a -> 'b t -> 'a t =
@@ -1640,7 +1690,7 @@ Monad type:
       List.fold_left
         (fun k (_,vcl,evts) -> (vcl,evts)::k)
         k (Evt.elements es)
-      
+
     let force_once (m : 'a t) : 'a t =
       let res = ref None in
       let new_m eiid =
