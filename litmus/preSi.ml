@@ -924,15 +924,72 @@ module Make
                 EPF.fi ~out:"chan" (sprintf "%s%s=%s;" prf p1 p2) arg)
           fmt args ;
         List.iter (fun f ->
-            let (p, loc, _) = f in
-            O.fi "if (p->%s == NoFault)" (tag_log f);
+            let ((p, lbl), loc, _) = f in
+            let cond = sprintf "p->%s == NoFault" (tag_log f) in
+            let cond = match lbl, loc with
+              | None, None ->
+                 cond
+              | Some _, None | None, Some _ ->
+                 List.fold_left
+                   (fun cond ((p0, lbl0), loc0, _) ->
+                     if Proc.equal p0 p && Misc.is_none lbl0 && Misc.is_none loc0 then
+                       sprintf "%s && p->%s != NoFault" cond (tag_log ((p0, lbl0), loc0, None))
+                     else
+                       cond)
+                   cond faults
+              | Some _, Some _ ->
+                 List.fold_left
+                   (fun cond ((p0, lbl0), loc0, _) ->
+                     if Proc.equal p0 p && (Misc.is_none lbl0 || Misc.is_none loc0) then
+                       sprintf "%s && p->%s != NoFault" cond (tag_log ((p0, lbl0), loc0, None))
+                     else
+                       cond)
+                   cond faults
+            in
+            O.fi "if (%s)" cond;
             (* No fault record don't and we bother about printing the type *)
-            let fs = Fault.pp_fatom A.V.pp_v A.FaultType.pp (p, loc, None) in
+            let fs = Fault.pp_fatom A.V.pp_v A.FaultType.pp ((p, lbl), loc, None) in
             O.fii "puts(\" ~%s;\");" fs;
-            O.fi "else" ;
+
+            let cond = sprintf "p->%s != NoFault" (tag_log f) in
+            let cond = match lbl, loc with
+              | Some _, Some _ ->
+                 cond
+              | None, None ->
+                 List.fold_left
+                   (fun cond ((p0, lbl0), loc0, _) ->
+                     if Proc.equal p0 p && (Misc.is_some lbl0 || Misc.is_some loc0) then
+                       sprintf "%s && p->%s == NoFault" cond (tag_log ((p0, lbl0), loc0, None))
+                     else
+                       cond)
+                   cond faults
+              | Some lbl, None ->
+                 let faults =
+                   List.filter
+                     (fun ((p0, lbl0), loc0, _) ->
+                       Proc.equal p0 p && Misc.is_some lbl0 && Misc.is_some loc0 &&
+                         Label.compare (Misc.as_some lbl0) lbl = 0
+                     ) faults in
+                   List.fold_left
+                     (fun cond ((p0, lbl0), loc0, _) ->
+                       sprintf "%s && p->%s == NoFault" cond (tag_log ((p0, lbl0), loc0, None)))
+                     cond faults
+              | None, Some loc ->
+                 let faults =
+                   List.filter
+                     (fun ((p0, lbl0), loc0, _) ->
+                       Proc.equal p0 p && Misc.is_some lbl0 && Misc.is_some loc0 &&
+                         A.V.compare (Misc.as_some loc0) loc = 0
+                     ) faults in
+                 List.fold_left
+                   (fun cond ((p0, lbl0), loc0, _) ->
+                     sprintf "%s && p->%s == NoFault" cond (tag_log ((p0, lbl0), loc0, None)))
+                   cond faults
+            in
+            O.fi "if (%s)" cond;
             (* Force pp_fatom to call pp_ft *)
             let pp_ft _ = "%s" in
-            let f = (p, loc, Some "") in
+            let f = ((p, lbl), loc, Some "") in
             let fs = Fault.pp_fatom A.V.pp_v pp_ft f in
             O.fii "printf(\" %s;\", fault_type_names[p->%s]);" fs (tag_log f)
           ) faults;
