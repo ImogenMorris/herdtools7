@@ -36,7 +36,7 @@ let equal ((p1,lab1),x1,ft1) ((p2,lab2),x2,ft2) =
   equal_ft ft1 ft2
 
 let pp ((p,lab),v,ft) =
-  Printf.sprintf "fault(%s%s,%s%s)"
+  Printf.sprintf "fault(%s%s%s%s)"
     (Proc.pp p) (match lab with None -> "" | Some lab -> ":"^lab)
     (match v with None -> "" | Some v -> ","^v)
     (match ft with None -> "" | Some ft -> ","^ft)
