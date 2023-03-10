@@ -271,6 +271,7 @@ composite_faulttype:
 | fst=NAME COLON rem=separated_nonempty_list(COLON,NAME)
      { String.concat ":" (fst::rem) }
 fault:
+| FAULT LPAR lab=lbl RPAR { (lab,None,None) }
 | FAULT LPAR lab=lbl COMMA name=NAME RPAR
    { if FaultType.is name then (lab,None,Some name)
      else (lab,Some (Constant.mk_sym name),None) }
