@@ -2223,6 +2223,25 @@ let get_exported_label = function
   | I_ADR (_,BranchTarget.Lbl lbl) -> Some lbl
   | _ -> None
 
+let convert_if_imm_branch pc l2i =
+  let open BranchTarget in
+  let labelmap l =
+    let tgt = Label.Map.find l l2i in
+    let toofar = (tgt / 1000) != (pc / 1000) in
+    if toofar then
+      Warn.fatal "An indirect branch and its destination label must be on the same thread"
+    else
+      tgt - pc
+    in
+  function
+  | I_B (Lbl l) -> I_B (Offset (labelmap l))
+  | I_BC (c,(Lbl l)) -> I_BC (c,(Offset (labelmap l)))
+  | I_BL (Lbl l) -> I_BL (Offset (labelmap l))
+  | I_CBNZ (v,r,(Lbl l)) -> I_CBNZ (v,r,(Offset (labelmap l)))
+  | I_CBZ (v,r,(Lbl l)) -> I_CBZ (v,r,(Offset (labelmap l)))
+  | I_TBNZ (v,r,k,(Lbl l)) -> I_TBNZ (v,r,k,(Offset (labelmap l)))
+  | I_TBZ (v,r,k,(Lbl l)) -> I_TBZ (v,r,k,(Offset (labelmap l)))
+  | instr -> instr
 
 module
   MakeInstr
@@ -2258,6 +2277,8 @@ module
   let is_overwritable = is_overwritable
   and can_overwrite =  can_overwrite
   and get_exported_label = get_exported_label
+
+  let convert_if_imm_branch = convert_if_imm_branch
 
   module Set =
     MySet.Make

@@ -26,6 +26,8 @@ module type S = sig
   val can_overwrite : t -> bool
   val get_exported_label : t -> Label.t option
 
+  val convert_if_imm_branch : int -> int Label.Map.t -> t -> t
+
   module Set : MySet.S with type elt = t
 end
 
@@ -45,6 +47,8 @@ module No (I:sig type instr end) = struct
   let is_overwritable _ = false
   let can_overwrite _ = false
   let get_exported_label _ = None
+
+  let convert_if_imm_branch _ _ _ = fail "convert_if_imm_branch"
 
   module Set =
     MySet.Make

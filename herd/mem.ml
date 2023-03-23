@@ -330,7 +330,8 @@ module Make(C:Config) (S:Sem.Semantics) : S with module S = S	=
                   then
                     if Label.Set.is_empty lbls then ps,ls
                     else
-                      (lbls,(proc,i))::ps,
+                      let new_i = A.V.Cst.Instr.convert_if_imm_branch addr prog i in
+                      (lbls,(proc,new_i))::ps,
                       (if is_overwritable then Label.Set.union lbls ls else ls)
                   else ps,ls)
                 (ps,ls) code)
