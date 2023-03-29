@@ -98,10 +98,20 @@ static void pp_fault(int proc, int instr_symb, int data_symb, int ftype)
   printf(");");
 }
 
+static bool fault_reported[NTHREADS][MAX_FAULTS_PER_THREAD];
+
+void pp_log_faults_init()
+{
+  for (int i = 0; i < NTHREADS; i++) {
+    for (int j = 0; j < MAX_FAULTS_PER_THREAD; j++) {
+      fault_reported[i][j] = false;
+    }
+  }
+}
+
 static void pp_log_faults(FILE *chan, th_faults_info_t *th_flts, int proc, int instr_symb,
                           int data_symb, int ftype)
 {
-  static bool flt_reported[NTHREADS][MAX_FAULTS_PER_THREAD];
   int found = 0;
   for (int i = 0; i < th_flts->n; i++) {
     fault_info_t *flt = &th_flts->faults[i];
@@ -119,9 +129,9 @@ static void pp_log_faults(FILE *chan, th_faults_info_t *th_flts, int proc, int i
       found = 1;
       printf(" ");
 
-      if (!flt_reported[proc][i]) {
+      if (!fault_reported[proc][i]) {
         pp_fault(proc, flt->instr_symb, flt->data_symb, flt->type);
-        flt_reported[proc][i] = true;
+        fault_reported[proc][i] = true;
       }
     }
   }

@@ -896,6 +896,8 @@ module Make
                 let p2 = String.concat "" p2 in
                 EPF.fi ~out:"chan" (sprintf "%s%s=%s;" prf p1 p2) arg)
           fmt args ;
+        if List.length faults > 0 then
+          O.fi "pp_log_faults_init();";
         List.iter (fun f ->
             let ((p, lbl), loc, ft) = f in
             let lbl = match lbl with
