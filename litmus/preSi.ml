@@ -785,7 +785,7 @@ module Make
               | _ -> ()
               end ;
               List.iter dump_test test.T.globals ;
-              O.oi "fatal(\"Error can find symbol for faulting address\"); return -1;" ;
+              O.oi "fatal(\"Cannot find symbol for faulting address\"); return -1;" ;
               O.o "}" ;
               O.o ""
             end ;
