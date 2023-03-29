@@ -1716,6 +1716,7 @@ module Make
             have_fault_handler && Misc.consp faults in
         if have_faults then begin
             O.oi "th_faults_info_init(&_ctx->out.th_faults[_role]);" ;
+            ()
           end ;
         O.oi "barrier_wait(_b);" ;
         O.oi "switch (_role) {" ;

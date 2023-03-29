@@ -100,7 +100,7 @@ static void pp_fault(int proc, int instr_symb, int data_symb, int ftype)
 
 static bool fault_reported[NTHREADS][MAX_FAULTS_PER_THREAD];
 
-void pp_log_faults_init()
+static void pp_log_faults_init()
 {
   for (int i = 0; i < NTHREADS; i++) {
     for (int j = 0; j < MAX_FAULTS_PER_THREAD; j++) {
