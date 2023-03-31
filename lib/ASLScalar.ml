@@ -197,3 +197,11 @@ let try_extract_slice s positions =
       if List.exists (( <= ) 64) positions then None
       else Some (S_BitVector (BV.extract_slice (BV.of_int64 i) positions))
   | _ -> None
+
+let try_concat s1 s2 =
+  match (s1, s2) with
+  | S_BitVector bv1, S_BitVector bv2 ->
+      Some (S_BitVector (BV.concat [ bv1; bv2 ]))
+  | _ -> None
+
+let empty = S_BitVector BV.empty

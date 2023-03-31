@@ -398,6 +398,7 @@ let ones length =
 
 let zero = zeros 1
 let one = ones 1
+let empty = (0, "")
 
 let is_zeros bv =
   let _length, data = remask bv in

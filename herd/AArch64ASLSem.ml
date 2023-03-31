@@ -460,6 +460,11 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
       module IMap = Map.Make (Int)
 
       let csym_tbl = ref IMap.empty
+      let atom v = M.VC.Atom v
+
+      let declare e acc =
+        let name = V.fresh_var () in
+        (name, M.VC.Assign (name, e) :: acc)
 
       let tr_v = function
         | ASLValue.V.Var s | ASLValue.V.Val (Constant.Frozen s) -> (
@@ -482,119 +487,142 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
             Warn.fatal "AArch64.ASL does not know how to translate: %s"
               (ASLValue.V.pp_v v)
 
-      
       let tr_loc ii = function
         | ASLS.A.Location_global x -> Some (A.Location_global (tr_v x))
         | ASLS.A.Location_reg (_proc, ASLBase.ArchReg reg) ->
             Some (A.Location_reg (ii.A.proc, reg))
         | ASLS.A.Location_reg (_proc, ASLBase.ASLLocalId _) -> None
 
-    let tr_op =
-      let open Op in
-      function
-      | Add -> Add
-      | Sub -> Sub
-      | Mul -> Mul
-      | Div -> Div
-      | And -> And
-      | Or -> Or
-      | Xor -> Xor
-      | Nor -> Nor
-      | AndNot2 -> AndNot2
-      | ASR -> ASR
-      | CapaAdd -> CapaAdd
-      | Alignd -> Alignd
-      | Alignu -> Alignu
-      | Build -> Build
-      | ClrPerm -> ClrPerm
-      | CpyType -> CpyType
-      | CSeal -> CSeal
-      | Cthi -> Cthi
-      | Seal -> Seal
-      | SetValue -> SetValue
-      | CapaSub -> CapaSub
-      | CapaSubs -> CapaSubs
-      | CapaSetTag -> CapaSetTag
-      | Unseal -> Unseal
-      | ShiftLeft -> ShiftLeft
-      | ShiftRight -> ShiftRight
-      | Lsr -> Lsr
-      | Lt -> Lt
-      | Gt -> Gt
-      | Eq -> Eq
-      | Ne -> Ne
-      | Le -> Le
-      | Ge -> Ge
-      | Max -> Max
-      | Min -> Min
-      | SetTag -> SetTag
-      | SquashMutable -> SquashMutable
-      | CheckPerms s -> CheckPerms s
-      | ToInteger -> ToInteger
-      | ArchOp _ -> assert false
+      let tr_arch_op arch_op acc (v1 : ASLValue.V.v) (v2 : ASLValue.V.v) =
+        match arch_op with
+        | ASLValue.Set _ ->
+            Warn.fatal "Cannot translate vector operations to AArch64."
+        | ASLValue.Concat -> (
+            match (v1, v2) with
+            | _, ASLValue.V.Val (Constant.Concrete (ASLScalar.S_BitVector bv2))
+              -> (
+                match Asllib.Bitvector.length bv2 with
+                | 0 -> (atom (tr_v v1), acc)
+                | n ->
+                    let shifted, acc =
+                      declare (M.VC.Unop (Op.LeftShift n, tr_v v1)) acc
+                    in
+                    (M.VC.Binop (Op.Or, shifted, tr_v v2), acc))
+            | ASLValue.V.Val (Constant.Concrete (ASLScalar.S_BitVector bv1)), _
+              when Asllib.Bitvector.is_zeros bv1 ->
+                (atom (tr_v v2), acc)
+            | _, ASLValue.V.Var _ ->
+                Warn.fatal
+                  "Not yet implemented: concatenating variables: %s and %s."
+                  (ASLValue.V.pp_v v1) (ASLValue.V.pp_v v2)
+            | _ ->
+                Warn.fatal "Cannot translate concatenation of %s and %s."
+                  (ASLValue.V.pp_v v1) (ASLValue.V.pp_v v2))
 
-      let tr_arch_op1 =
-        let open ASLValue.ASLArchOp in
-        let atom v = M.VC.Atom v in
-        let declare e acc =
-          let name = V.fresh_var () in
-          (name, M.VC.Assign (name, e) :: acc)
-        in
-        fun op acc v ->
-          let v = tr_v v in
-          match op with
-          | ToInt -> (atom v, acc)
-          | ToBool -> (M.VC.Binop (Op.Ne, V.zero, v), acc)
-          | ToBV -> (atom v, acc)
-          | BVSlice positions -> (
-              let extract_bits_to dst_pos src_pos n acc =
-                if n >= 64 then
-                  Warn.fatal "Can't handle values with more than 64 bits."
-                else
-                  let shifted_v, acc =
-                    let shift = src_pos - dst_pos in
-                    if shift = 0 then (v, acc)
-                    else
-                      let dir, amount =
-                        if shift > 0 then (Op.ShiftRight, shift)
-                        else (Op.ShiftLeft, ~-shift)
-                      in
-                      declare (M.VC.Binop (dir, v, V.intToV amount)) acc
-                  in
-                  let mask = ((1 lsl n) - 1) lsl (dst_pos - n) in
-                  (M.VC.Unop (Op.AndK (string_of_int mask), shifted_v), acc)
-              in
-              let folder (prec, acc, i) (x, n) =
-                let w, acc = extract_bits_to i x n acc in
-                let nw, acc = declare w acc in
-                let nprec, acc = declare prec acc in
-                (M.VC.Binop (Op.Or, nw, nprec), acc, i + n)
-              in
-              let group_by_continuous =
-                let rec aux prec start length acc = function
-                  | [] -> (start, length) :: acc
-                  | h :: t ->
-                      if prec = h + 1 then aux h start (length + 1) acc t
-                      else aux h h 1 ((start, length) :: acc) t
+      let tr_op =
+        let open Op in
+        function
+        | ArchOp archop -> tr_arch_op archop
+        | op ->
+            let op =
+              match op with
+              | Add -> Add
+              | Sub -> Sub
+              | Mul -> Mul
+              | Div -> Div
+              | And -> And
+              | Or -> Or
+              | Xor -> Xor
+              | Nor -> Nor
+              | AndNot2 -> AndNot2
+              | ASR -> ASR
+              | CapaAdd -> CapaAdd
+              | Alignd -> Alignd
+              | Alignu -> Alignu
+              | Build -> Build
+              | ClrPerm -> ClrPerm
+              | CpyType -> CpyType
+              | CSeal -> CSeal
+              | Cthi -> Cthi
+              | Seal -> Seal
+              | SetValue -> SetValue
+              | CapaSub -> CapaSub
+              | CapaSubs -> CapaSubs
+              | CapaSetTag -> CapaSetTag
+              | Unseal -> Unseal
+              | ShiftLeft -> ShiftLeft
+              | ShiftRight -> ShiftRight
+              | Lsr -> Lsr
+              | Lt -> Lt
+              | Gt -> Gt
+              | Eq -> Eq
+              | Ne -> Ne
+              | Le -> Le
+              | Ge -> Ge
+              | Max -> Max
+              | Min -> Min
+              | SetTag -> SetTag
+              | SquashMutable -> SquashMutable
+              | CheckPerms s -> CheckPerms s
+              | ToInteger -> ToInteger
+              | ArchOp _ -> assert false
+            in
+            fun acc v1 v2 -> (M.VC.Binop (op, tr_v v1, tr_v v2), acc)
+
+      let tr_arch_op1 op acc v =
+        let v = tr_v v in
+        match op with
+        | ASLValue.ToInt -> (atom v, acc)
+        | ASLValue.ToBool -> (M.VC.Binop (Op.Ne, V.zero, v), acc)
+        | ASLValue.ToBV -> (atom v, acc)
+        | ASLValue.BVSlice positions -> (
+            let extract_bits_to dst_pos src_pos n acc =
+              if n >= 64 then
+                Warn.fatal "Can't handle values with more than 64 bits."
+              else
+                let shifted_v, acc =
+                  let shift = src_pos - dst_pos in
+                  if shift = 0 then (v, acc)
+                  else
+                    let dir =
+                      if shift > 0 then Op.LogicalRightShift shift
+                      else Op.LeftShift ~-shift
+                    in
+                    declare (M.VC.Unop (dir, v)) acc
                 in
-                function [] -> [] | h :: t -> aux h h 1 [] t
+                let mask = ((1 lsl n) - 1) lsl (dst_pos - n) in
+                (M.VC.Unop (Op.AndK (string_of_int mask), shifted_v), acc)
+            in
+            let folder (prec, acc, i) (x, n) =
+              let w, acc = extract_bits_to i x n acc in
+              let nw, acc = declare w acc in
+              let nprec, acc = declare prec acc in
+              (M.VC.Binop (Op.Or, nw, nprec), acc, i + n)
+            in
+            let group_by_continuous =
+              let rec aux prec start length acc = function
+                | [] -> (start, length) :: acc
+                | h :: t ->
+                    if prec = h + 1 then aux h start (length + 1) acc t
+                    else aux h h 1 ((start, length) :: acc) t
               in
-              match group_by_continuous positions with
-              | [] -> (atom V.zero, acc)
-              | [ (63, 64) ] -> (atom v, acc)
-              | [ (31, 32) ] -> (M.VC.Unop (Op.Mask MachSize.Word, v), acc)
-              | [ (15, 16) ] -> (M.VC.Unop (Op.Mask MachSize.Short, v), acc)
-              | [ (7, 8) ] -> (M.VC.Unop (Op.Mask MachSize.Byte, v), acc)
-              | (x, n) :: t ->
-                  let first, acc =
-                    if n = 1 then (M.VC.Unop (Op.ReadBit x, v), acc)
-                    else extract_bits_to 0 x n acc
-                  in
-                  let w, acc, _ = List.fold_left folder (first, acc, n) t in
-                  (w, acc))
-          | _ ->
-              Warn.fatal
-                "Not yet implemented: translation of vector operations."
+              function [] -> [] | h :: t -> aux h h 1 [] t
+            in
+            match group_by_continuous positions with
+            | [] -> (atom V.zero, acc)
+            | [ (63, 64) ] -> (atom v, acc)
+            | [ (31, 32) ] -> (M.VC.Unop (Op.Mask MachSize.Word, v), acc)
+            | [ (15, 16) ] -> (M.VC.Unop (Op.Mask MachSize.Short, v), acc)
+            | [ (7, 8) ] -> (M.VC.Unop (Op.Mask MachSize.Byte, v), acc)
+            | (x, n) :: t ->
+                let first, acc =
+                  if n = 1 then (M.VC.Unop (Op.ReadBit x, v), acc)
+                  else extract_bits_to 0 x n acc
+                in
+                let w, acc, _ = List.fold_left folder (first, acc, n) t in
+                (w, acc))
+        | _ ->
+            Warn.fatal "Not yet implemented: translation of vector operations."
 
       let tr_op1 =
         let open Op in
@@ -649,7 +677,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
         | ASLVC.Atom a -> (M.VC.Atom (tr_v a), acc)
         | ASLVC.ReadInit _ -> assert false
         | ASLVC.Unop (op, v) -> tr_op1 op acc v
-        | ASLVC.Binop (op, a1, a2) -> (M.VC.Binop (tr_op op, tr_v a1, tr_v a2), acc)
+        | ASLVC.Binop (op, v1, v2) -> tr_op op acc v1 v2
         | ASLVC.Terop (op, a1, a2, a3) ->
             (M.VC.Terop (op, tr_v a1, tr_v a2, tr_v a3), acc)
 

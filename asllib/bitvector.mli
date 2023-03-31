@@ -98,6 +98,9 @@ val one : t
 val zero : t
 (** A length 1 bitvector with a 0 bit inside. *)
 
+val empty : t
+(** A length 0 bitvector. *)
+
 val ones : int -> t
 (** [ones n] is a bitvector of length [n] with every bit set. *)
 

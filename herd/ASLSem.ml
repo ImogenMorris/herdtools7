@@ -160,8 +160,8 @@ module Make (C : Config) = struct
       | 128 -> MachSize.S128
       | _ -> Warn.fatal "Cannot access a register with size %s" (V.pp_v v)
 
-    let to_bv = M.op1 (Op.ArchOp1 ASLValue.ASLArchOp.ToBV)
-    let to_int = M.op1 (Op.ArchOp1 ASLValue.ASLArchOp.ToInt)
+    let to_bv = M.op1 (Op.ArchOp1 ASLValue.ToBV)
+    let to_int = M.op1 (Op.ArchOp1 ASLValue.ToInt)
 
     (**************************************************************************)
     (* Special monad interations                                              *)
@@ -198,12 +198,8 @@ module Make (C : Config) = struct
 
     let binop =
       let open AST in
-      let to_bool op v1 v2 =
-        op v1 v2 >>= M.op1 (Op.ArchOp1 ASLValue.ASLArchOp.ToBool)
-      in
-      let to_bv op v1 v2 =
-        op v1 v2 >>= M.op1 (Op.ArchOp1 ASLValue.ASLArchOp.ToBV)
-      in
+      let to_bool op v1 v2 = op v1 v2 >>= M.op1 (Op.ArchOp1 ASLValue.ToBool) in
+      let to_bv op v1 v2 = op v1 v2 >>= M.op1 (Op.ArchOp1 ASLValue.ToBV) in
       let or_ v1 v2 =
         match (v1, v2) with
         | V.Val (Constant.Concrete (ASLScalar.S_BitVector bv)), v
@@ -242,11 +238,9 @@ module Make (C : Config) = struct
           function
           | V.Val (Constant.Concrete (ASLScalar.S_Bool b)) ->
               V.Val (Constant.Concrete (ASLScalar.S_Bool (not b))) |> return
-          | v -> M.op1 Op.Not v >>= M.op1 (Op.ArchOp1 ASLValue.ASLArchOp.ToBool)
-          )
+          | v -> M.op1 Op.Not v >>= M.op1 (Op.ArchOp1 ASLValue.ToBool))
       | NEG -> M.op Op.Sub V.zero
-      | NOT ->
-          fun v -> M.op1 Op.Inv v >>= M.op1 (Op.ArchOp1 ASLValue.ASLArchOp.ToBV)
+      | NOT -> fun v -> M.op1 Op.Inv v >>= M.op1 (Op.ArchOp1 ASLValue.ToBV)
 
     let on_write_identifier (ii, poi) x scope v =
       let loc = loc_of_scoped_id ii x scope in
@@ -271,7 +265,7 @@ module Make (C : Config) = struct
           | Some v -> return (V.Val v))
       | V.Val _ ->
           Warn.user_error "Trying to index non-indexable value %s" (V.pp_v v)
-      | V.Var _ -> Warn.fatal "Cannot write to a symbolic value %s." (V.pp_v v)
+      | V.Var _ -> M.op1 (Op.ArchOp1 (ASLValue.Get i)) v
 
     let list_update i v li =
       let rec aux acc i li =
@@ -283,23 +277,21 @@ module Make (C : Config) = struct
       aux [] i li
 
     let set_i i v vec =
-      let li =
-        match vec with
-        | V.Val (Constant.ConcreteVector li) -> li
-        | V.Val _ ->
-            Warn.user_error "Trying to index non-indexable value %s"
-              (V.pp_v vec)
-        | V.Var _ ->
-            Warn.fatal "Not yet implemented: writing to a symbolic value."
-      and c = match v with V.Val c -> c | V.Var i -> V.freeze i in
-      match list_update i c li with
-      | None ->
-          Warn.user_error "Index %d out of bounds for value %s" i (V.pp_v vec)
-      | Some li -> return (V.Val (Constant.ConcreteVector li))
+      match vec with
+      | V.Val (Constant.ConcreteVector li) -> (
+          let c = match v with V.Val c -> c | V.Var i -> V.freeze i in
+          match list_update i c li with
+          | None ->
+              Warn.user_error "Index %d out of bounds for value %s" i
+                (V.pp_v vec)
+          | Some li -> return (V.Val (Constant.ConcreteVector li)))
+      | V.Val _ ->
+          Warn.user_error "Trying to index non-indexable value %s" (V.pp_v vec)
+      | V.Var _ -> M.op (Op.ArchOp (ASLValue.Set i)) vec v
 
     let read_from_bitvector positions bvs =
       let positions = Asllib.ASTUtils.slices_to_positions v_as_int positions in
-      let arch_op1 = ASLValue.ASLArchOp.BVSlice positions in
+      let arch_op1 = ASLValue.BVSlice positions in
       M.op1 (Op.ArchOp1 arch_op1) bvs
 
     let write_to_bitvector positions w v =
@@ -324,24 +316,14 @@ module Make (C : Config) = struct
         List.filter filter bvs
       in
       match bvs with
+      | [] -> V.Val (Constant.Concrete ASLScalar.empty) |> return
       | [ x ] -> return x
-      | [ V.Val (Constant.Concrete (ASLScalar.S_BitVector bv)); V.Var x ]
-        when Asllib.Bitvector.to_int bv = 0 ->
-          return (V.Var x)
-      | [ (V.Var _ as x); V.Val (Constant.Concrete (ASLScalar.S_BitVector bv)) ]
-        when Asllib.Bitvector.is_zeros bv ->
-          M.op1 (Op.LeftShift (Asllib.Bitvector.length bv)) x
-      | bvs ->
-          let as_concrete_bv = function
-            | V.Val (Constant.Concrete (ASLScalar.S_BitVector bv)) -> bv
-            | _ ->
-                Warn.fatal
-                  "Not yet implemented: concatenating symbolic bitvectors: \
-                   [%s]."
-                  (String.concat "," (List.map V.pp_v bvs))
+      | h :: t ->
+          let folder acc v =
+            let* acc = acc in
+            M.op (Op.ArchOp ASLValue.Concat) acc v
           in
-          let bv_res = Asllib.Bitvector.concat (List.map as_concrete_bv bvs) in
-          return (V.Val (Constant.Concrete (ASLScalar.S_BitVector bv_res)))
+          List.fold_left folder (return h) t
 
     (**************************************************************************)
     (* Primitives and helpers                                                 *)
