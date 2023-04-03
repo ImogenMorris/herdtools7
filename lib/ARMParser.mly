@@ -27,12 +27,12 @@ module A = ARMBase
 %token <string> CODEVAR
 %token <int> PROC
 
-%token SEMI COMMA PIPE COLON LBRK RBRK
+%token SEMI COMMA PIPE COLON LBRK RBRK LPAREN RPAREN
 
 /* Instruction tokens */
 
 %token I_ADD I_ADDS I_BX I_SUB I_SUBS I_AND I_ANDS I_B I_BEQ I_BNE I_CMP I_MOV I_MOVW I_MOVT I_MOVNE I_MOVEQ I_XOR I_XORS I_DMB I_DSB I_ISB I_CBZ I_CBNZ
-%token I_LDR I_LDREX I_LDRNE I_LDREQ I_STR I_STRNE I_STREQ I_STREX
+%token I_LDR I_LDREX I_LDRNE I_LDREQ I_LDM I_LDMIB I_STR I_STRNE I_STREQ I_STREX
 %token I_SY I_ST I_ISH I_ISHST I_NSH I_NSHST I_OSH I_OSHST
 %type <MiscParser.proc list * (ARMBase.parsedPseudo) list list> main
 %start  main
@@ -143,6 +143,13 @@ instr:
      { A.I_LDREX ($2,$4) }
   | I_LDREX reg COMMA LBRK reg RBRK
      { A.I_LDREX ($2,$5) }
+  (* 2-reg and 3-reg variants of LDM for now *)
+  | I_LDM reg COMMA LPAREN reg COMMA reg RPAREN
+     { A.I_LDM2 ($2, $5, $7, A.NO) }
+  | I_LDMIB reg COMMA LPAREN reg COMMA reg RPAREN
+     { A.I_LDM2 ($2, $5, $7, A.IB) }
+  | I_LDM reg COMMA LPAREN reg COMMA reg COMMA reg RPAREN
+     { A.I_LDM3 ($2, $5, $7, $9, A.NO) }
 /* Store */
   | I_STR reg COMMA reg
      { A.I_STR ($2,$4,A.AL) }

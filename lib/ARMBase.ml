@@ -172,6 +172,8 @@ type setflags = SetFlags | DontSetFlags
 
 type condition = NE | EQ | AL (* ALWAYS *)
 
+type increment = NO | IB
+
 type 'k kinstruction =
   | I_NOP
   | I_ADD of setflags * reg * reg * 'k
@@ -189,6 +191,8 @@ type 'k kinstruction =
   | I_LDR of reg * reg * condition
   | I_LDREX of reg * reg
   | I_LDRO of reg * reg * 'k * condition
+  | I_LDM2 of reg * reg * reg * increment
+  | I_LDM3 of reg * reg * reg * reg * increment
   | I_LDR3 of reg * reg * reg * condition
   | I_STR of reg * reg * condition
   | I_STR3 of reg * reg * reg * condition
@@ -243,6 +247,14 @@ let do_pp_instruction m =
     ","^ "[" ^ pp_reg rn ^ "]" in
   let ppi_rrm opcode rt rn =  ppi_rrmc opcode rt rn AL in
 
+  let pp_memom opcode = function
+  | NO -> opcode
+  | IB -> opcode ^ "IB" in
+
+  let ppi_rr_multiple opcode rt rs i =
+    pp_memom opcode i ^ " " ^ pp_reg rt ^ ", {" ^
+        (String.concat "," (List.map pp_reg rs)) ^ "}"in
+
   let ppi_rrrmc opcode rt ri rn c =
     pp_memoc opcode c^" "^pp_reg rt ^ ","^
     "[" ^ pp_reg ri ^ "," ^ pp_reg rn ^ "]" in
@@ -279,6 +291,8 @@ let do_pp_instruction m =
   | I_BX r -> "BX " ^ (pp_reg r)
   | I_CMP (r1,r2) -> ppi_rr "CMP" r1 r2
   | I_LDREX(rt,rn) -> ppi_rrm "LDREX" rt rn
+  | I_LDM2(rt,r1,r2,i) -> ppi_rr_multiple "LDM" rt [r1; r2] i
+  | I_LDM3(rt,r1,r2,r3,i) -> ppi_rr_multiple "LDM" rt [r1;r2;r3] i
   | I_LDR(rt,rn,c) -> ppi_rrmc "LDR" rt rn c
   | I_LDR3(rt,rn,rm,c) -> ppi_rrrmc "LDR" rt rn rm c
   | I_LDRO(rt,rn,k,_) -> ppi_rrkmc "LDR" rt rn k
@@ -337,6 +351,7 @@ let fold_regs (f_reg,f_sreg) =
   | I_CMP (r1,r2)
       -> fold_reg r2 (fold_reg r1 c)
   | I_LDR3 (r1, r2, r3, _)
+  | I_LDM2 (r1, r2, r3,_)
   | I_ADD3 (_, r1, r2, r3)
   | I_SUB3 (_, r1, r2, r3)
   | I_STR3 (r1, r2, r3, _)
@@ -345,6 +360,8 @@ let fold_regs (f_reg,f_sreg) =
   | I_SADD16 (r1, r2, r3)
   | I_SEL (r1, r2, r3)
       -> fold_reg r3 (fold_reg r2 (fold_reg r1 c))
+  | I_LDM3 (r1, r2, r3,r4,_)
+      -> fold_reg r4 (fold_reg r3 (fold_reg r2 (fold_reg r1 c)))
   | I_BX r
   | I_CMPI (r, _)
   | I_MOVI (r, _, _)
@@ -387,6 +404,8 @@ let map_regs f_reg f_symb =
   | I_LDRO (r1, r2,k,c) -> I_LDRO (map_reg r1, map_reg r2,k,c)
   | I_LDR (r1, r2, c) -> I_LDR (map_reg r1, map_reg r2, c)
   | I_LDR3 (r1, r2, r3, c) -> I_LDR3 (map_reg r1, map_reg r2, map_reg r3, c)
+  | I_LDM2 (r1,r2,r3,i) -> I_LDM2 (map_reg r1, map_reg r2, map_reg r3,i)
+  | I_LDM3 (r1,r2,r3,r4,i) -> I_LDM3 (map_reg r1, map_reg r2, map_reg r3,map_reg r4, i)
   | I_STR (r1, r2, c) -> I_STR (map_reg r1, map_reg r2, c)
   | I_STR3 (r1, r2, r3, c) -> I_STR3 (map_reg r1, map_reg r2, map_reg r3, c)
   | I_STREX (r1, r2, r3, c) -> I_STREX (map_reg r1, map_reg r2, map_reg r3, c)
@@ -422,6 +441,8 @@ let get_next = function
   | I_CMPI _
   | I_CMP _
   | I_LDR _
+  | I_LDM2 _
+  | I_LDM3 _
   | I_LDREX _
   | I_LDRO _
   | I_LDR3 _
@@ -468,6 +489,8 @@ include Pseudo.Make
         | I_CB _
         | I_CMP _
         | I_LDR _
+        | I_LDM2 _
+        | I_LDM3 _
         | I_LDREX _
         | I_LDR3 _
         | I_STR _
@@ -509,6 +532,7 @@ include Pseudo.Make
         | I_SEL _
           -> 0
         | I_LDR _
+        | I_LDM2 _
         | I_LDREX _
         | I_LDRO _
         | I_LDR3 _
@@ -516,6 +540,8 @@ include Pseudo.Make
         | I_STR3 _
         | I_STREX _
             -> 1
+        | I_LDM3 _
+            -> 3
 
 
       let fold_labels k f = function

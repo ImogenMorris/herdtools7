@@ -27,6 +27,15 @@ let match_instr subs pattern instr = match pattern,instr with
       add_subs
         [Cst(m,i); Reg(sr_name r1,r1'); Reg(sr_name r2,r2')]
         subs
+  | I_LDM2(r1,r2,r3,i),I_LDM2(r1',r2',r3',i') when i = i' ->
+      add_subs
+        [Reg(sr_name r1,r1');Reg(sr_name r2,r2');Reg(sr_name r3,r3')]
+        subs
+  | I_LDM3(r1,r2,r3,r4,i),I_LDM3(r1',r2',r3',r4',i') when i = i' ->
+      add_subs
+        [Reg(sr_name r1,r1');Reg(sr_name r2,r2');
+         Reg(sr_name r3,r3');Reg(sr_name r4,r4')]
+        subs
   | I_ADD(_,r1,r2,MetaConst.Int i),I_ADD(_,r1',r2',i')
   | I_LDRO(r1,r2,MetaConst.Int i,_),I_LDRO(r1',r2',i',_)
   | I_SUB(_,r1,r2,MetaConst.Int i),I_SUB(_,r1',r2',i')
@@ -152,6 +161,17 @@ let match_instr subs pattern instr = match pattern,instr with
           conv_reg r1 >> fun r1 ->
           conv_reg r2 >! fun r2 ->
           I_LDR(r1,r2,c)
+      | I_LDM2(r1,r2,r3,i) ->
+          conv_reg r1 >> fun r1 ->
+          conv_reg r2 >> fun r2 ->
+          conv_reg r3 >! fun r3 ->
+          I_LDM2(r1,r2,r3,i)
+      | I_LDM3(r1,r2,r3,r4,i) ->
+          conv_reg r1 >> fun r1 ->
+          conv_reg r2 >> fun r2 ->
+          conv_reg r3 >> fun r3 ->
+          conv_reg r4 >! fun r4 ->
+          I_LDM3(r1,r2,r3,r4,i)
       | I_LDRO(r1,r2,v,c) ->
           conv_reg r1 >>
           fun r1 -> conv_reg r2 >>
