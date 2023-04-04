@@ -41,9 +41,29 @@ struct
   type start_points = A.start_points
   type code_segment = A.code_segment
 
+  let rec preload_labels proc addr mem = function
+    | [] ->
+       mem
+    | ins::code -> begin
+      match ins with
+      | A.Nop ->
+        preload_labels proc addr mem code
+      | A.Instruction _ ->
+            preload_labels proc (addr+4) mem code
+      | A.Label (lbl,ins) ->
+          let mem =
+            preload_labels proc addr mem (ins::code) in
+          if Label.Map.mem lbl mem then
+            Warn.user_error
+              "Label %s occurs more that once" lbl ;
+          Label.Map.add lbl addr mem
+      | A.Symbolic _
+      | A.Macro (_,_) -> assert false
+      end
+
   let rec load_code proc addr mem rets = function
     | [] ->
-       mem,[],IntMap.add addr (proc,[]) rets
+       [],IntMap.add addr (proc,[]) rets
     | ins::code ->
       load_ins proc addr mem rets code ins
 
@@ -52,18 +72,16 @@ struct
     | A.Nop ->
       load_code proc addr mem rets code
     | A.Instruction ins ->
-        let new_mem,start,new_rets =
+        let start,new_rets =
           load_code proc (addr+4) mem rets code in
-        let new_start = (addr,ins)::start in
+        let new_ins = A.V.Cst.Instr.convert_if_imm_branch addr mem ins in
+        let new_start = (addr,new_ins)::start in
         let newer_rets = IntMap.add addr (proc,new_start)  new_rets in
-        new_mem,new_start,newer_rets
-    | A.Label (lbl,ins) ->
-        let mem,start,new_rets =
+        new_start,newer_rets
+    | A.Label (_,ins) ->
+        let start,new_rets =
           load_ins proc addr mem rets code ins in
-        if Label.Map.mem lbl mem then
-          Warn.user_error
-            "Label %s occurs more that once" lbl ;
-        Label.Map.add lbl addr mem,start,new_rets
+        start,new_rets
     | A.Symbolic _
     | A.Macro (_,_) -> assert false
 
@@ -73,7 +91,8 @@ struct
     | ((proc,_,func),code)::prog ->
        let mem,starts,rets = load_iter prog in
        let addr = func_start_addr proc func in
-       let fin_mem,start,fin_rets = load_code proc addr mem rets code in
+       let fin_mem = preload_labels proc addr mem code in
+       let start,fin_rets = load_code proc addr fin_mem rets code in
        fin_mem,(proc,func,start)::starts,fin_rets in
     let mem,starts,codes = load_iter prog in
     let mains,fhandlers =
