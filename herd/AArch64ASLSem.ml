@@ -260,23 +260,20 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
                       "op" ^= logical_op op;
                       "setflags" ^= setflags op;
                     ] )
-          | ADD | ADDS | SUB
-          | SUBS
-            (* ->
-               let subop = match op with SUB | SUBS -> true | _ -> false in
-               Some
-                 ( "integer/arithmetic/add-sub/immediate.opn",
-                   stmt
-                     [
-                       "d" ^= reg rd;
-                       "n" ^= reg rn;
-                       "imm" ^= litbv datasize k;
-                       "datasize" ^= liti datasize;
-                       "sub_op" ^= litb subop;
-                       "setflags" ^= setflags op;
-                     ] ) *)
-          | ASR | LSL | LSR ->
-              None)
+          | ADD | ADDS | SUB | SUBS ->
+              let subop = match op with SUB | SUBS -> true | _ -> false in
+              Some
+                ( "integer/arithmetic/add-sub/immediate.opn",
+                  stmt
+                    [
+                      "d" ^= reg rd;
+                      "n" ^= reg rn;
+                      "imm" ^= litbv datasize k;
+                      "datasize" ^= liti datasize;
+                      "sub_op" ^= litb subop;
+                      "setflags" ^= setflags op;
+                    ] )
+          | ASR | LSL | LSR -> None)
       | I_STR (v, rt, rn, RV (v', rm), barrel_shift)
       | I_LDR (v, rt, rn, RV (v', rm), barrel_shift) ->
           let memop =
@@ -688,7 +685,40 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
             let expr, acc = tr_expr acc ex in
             M.VC.Assign (tr_v la, expr) :: acc
 
-      let tr_cnstrnts cs = List.fold_left tr_cnstrnt [] cs
+      let tr_cnstrnts cs =
+        let prepare (symb_assign, acc) = function
+          | ASLVC.Assign (ASLValue.V.Var i, e) -> (IMap.add i e symb_assign, acc)
+          | cnstrnt -> (symb_assign, tr_cnstrnt acc cnstrnt)
+        in
+        let symb_assigns, acc = List.fold_left prepare (IMap.empty, []) cs in
+        let tr_one acc i =
+          match IMap.find_opt i symb_assigns with
+          | Some e ->
+              let e', acc = tr_expr acc e in
+              M.VC.Assign (tr_v (ASLValue.V.Var i), e') :: acc
+          | None -> acc
+        in
+        let map_diff_key map1 map2 =
+          let folder key _val acc =
+            if IMap.mem key map2 then acc else key :: acc
+          in
+          IMap.fold folder map1 []
+        in
+        let rec loop to_do acc1 =
+          let csym_tbl_1 = !csym_tbl in
+          let acc2 = List.fold_left tr_one [] to_do in
+          let to_do = map_diff_key !csym_tbl csym_tbl_1
+          and acc = List.rev_append acc1 acc2 in
+          match to_do with [] -> acc | _ -> loop to_do acc
+        in
+        let to_do = map_diff_key !csym_tbl IMap.empty in
+        let res = loop to_do acc in
+        let () =
+          if _dbg then
+            Format.eprintf "Constraints translated into %s. @."
+              (M.VC.pp_cnstrnts res)
+        in
+        res
 
       let event_to_monad ii is_data event =
         let { ASLE.action; ASLE.iiid; _ } = event in
@@ -729,14 +759,16 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
         let monads = Seq.map one_pair (ASLE.EventRel.to_seq rel) in
         Seq.fold_left ( ||| ) (return ()) monads
 
-      let tr_execution ii (_conc, cs, set_pp, vbpp) =
+      let tr_execution ii (conc, cs, set_pp, vbpp) =
         let () = if _dbg then Printf.eprintf "Translating event structure:\n" in
-        let constraints =
-          let () =
-            if _dbg then
-              Printf.eprintf "\t- constraints: %s\n" (ASLVC.pp_cnstrnts cs)
-          in
-          M.restrict (tr_cnstrnts cs)
+        let () =
+          if _dbg then (
+            Printf.eprintf "\t-all events:\n";
+            ESet.iter
+              (fun e ->
+                Printf.eprintf "\t\t- %s:%s\n" (ASLE.pp_eiid e)
+                  (ASLE.Act.pp_action e.ASLE.action))
+              conc.ASLS.str.ASLE.events)
         in
         let events =
           match StringMap.find_opt "AArch64" set_pp with
@@ -775,7 +807,6 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
         let iico_data = translate_maybe_rel M.( >>= ) aarch64_iico_data in
         let iico_ctrl = translate_maybe_rel M.( >>*= ) aarch64_iico_ctrl in
         let iico_order = translate_maybe_rel M.bind_order aarch64_iico_order in
-        let () = if _dbg then Printf.eprintf "\n" in
         let branch =
           let one_event acc event =
             match (acc, event.ASLE.action) with
@@ -788,6 +819,14 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
           in
           List.fold_left one_event (B.Next []) event_list
         in
+        let constraints =
+          let () =
+            if _dbg then
+              Printf.eprintf "\t- constraints: %s\n" (ASLVC.pp_cnstrnts cs)
+          in
+          M.restrict (tr_cnstrnts cs)
+        in
+        let () = if _dbg then Printf.eprintf "\n" in
         let* () =
           events_m ||| iico_data ||| iico_ctrl ||| iico_order ||| constraints
         in
@@ -881,6 +920,11 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
                 (List.length conc_and_pp)
           in
           let monads = List.map (Translator.tr_execution ii) conc_and_pp in
+          let () =
+            if _dbg then
+              Printf.eprintf "End of ASL execution for %s.\n\n%!"
+                (A.pp_instruction PPMode.Ascii ii.A.inst)
+          in
           match monads with
           | [] -> Warn.fatal "No possible ASL execution."
           | h :: t -> List.fold_left M.altT h t)

@@ -502,13 +502,10 @@ module Make (B : Backend.S) = struct
            ("tuple construction", List.length les, List.length monads)
     else
       let folder acc le m =
-        let x =
-          match le.desc with
-          | LE_Var x -> x
-          | LE_Ignore -> "-"
-          | _ -> assert false
-        in
-        write_identifier_m acc x scope m
+        match le.desc with
+        | LE_Var x -> write_identifier_m acc x scope m
+        | LE_Ignore -> return lenv
+        | _ -> assert false
       in
       List.fold_left2 folder (return lenv) les monads
       ||> pair genv |||> continue

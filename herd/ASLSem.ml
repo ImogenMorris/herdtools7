@@ -160,8 +160,25 @@ module Make (C : Config) = struct
       | 128 -> MachSize.S128
       | _ -> Warn.fatal "Cannot access a register with size %s" (V.pp_v v)
 
-    let to_bv = M.op1 (Op.ArchOp1 ASLValue.ToBV)
-    let to_int = M.op1 (Op.ArchOp1 ASLValue.ToInt)
+    let to_bv v =
+      match v with
+      | V.Val (Constant.Concrete (ASLScalar.S_BitVector _)) -> return v
+      | V.Var _ | V.Val (Constant.Concrete _) ->
+          M.op1 (Op.ArchOp1 ASLValue.ToBV) v
+      | v ->
+          let v' = V.fresh_var () in
+          M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToBV, v)) ]
+          >>! v'
+
+    let to_int v =
+      match v with
+      | V.Val (Constant.Concrete (ASLScalar.S_Int _)) -> return v
+      | V.Var _ | V.Val (Constant.Concrete _) ->
+          M.op1 (Op.ArchOp1 ASLValue.ToInt) v
+      | v ->
+          let v' = V.fresh_var () in
+          M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToInt, v)) ]
+          >>! v'
 
     (**************************************************************************)
     (* Special monad interations                                              *)
@@ -182,7 +199,7 @@ module Make (C : Config) = struct
     let read_loc sz loc ii =
       let mk_action loc' v' = Act.Access (Dir.R, loc', v', sz) in
       let* v = M.read_loc false mk_action loc ii in
-      resize_from_quad sz v
+      resize_from_quad sz v >>= to_bv
 
     let loc_of_scoped_id ii x scope =
       A.Location_reg (ii.A.proc, ASLBase.ASLLocalId (scope, x))
@@ -199,7 +216,7 @@ module Make (C : Config) = struct
     let binop =
       let open AST in
       let to_bool op v1 v2 = op v1 v2 >>= M.op1 (Op.ArchOp1 ASLValue.ToBool) in
-      let to_bv op v1 v2 = op v1 v2 >>= M.op1 (Op.ArchOp1 ASLValue.ToBV) in
+      let to_bv op v1 v2 = op v1 v2 >>= to_bv in
       let or_ v1 v2 =
         match (v1, v2) with
         | V.Val (Constant.Concrete (ASLScalar.S_BitVector bv)), v
@@ -238,9 +255,17 @@ module Make (C : Config) = struct
           function
           | V.Val (Constant.Concrete (ASLScalar.S_Bool b)) ->
               V.Val (Constant.Concrete (ASLScalar.S_Bool (not b))) |> return
+          | V.Val (Constant.Symbolic _) as v ->
+              let v' = V.fresh_var () in
+              M.restrict M.VC.[ Assign (v', Unop (Op.Not, v)) ] >>! v'
           | v -> M.op1 Op.Not v >>= M.op1 (Op.ArchOp1 ASLValue.ToBool))
       | NEG -> M.op Op.Sub V.zero
-      | NOT -> fun v -> M.op1 Op.Inv v >>= M.op1 (Op.ArchOp1 ASLValue.ToBV)
+      | NOT -> (
+          function
+          | V.Val (Constant.Symbolic _) as v ->
+              let v' = V.fresh_var () in
+              M.restrict M.VC.[ Assign (v', Unop (Op.Inv, v)) ] >>! v'
+          | v -> M.op1 Op.Inv v >>= to_bv)
 
     let on_write_identifier (ii, poi) x scope v =
       let loc = loc_of_scoped_id ii x scope in
@@ -340,7 +365,7 @@ module Make (C : Config) = struct
     let read_register (ii, poi) r_m =
       let* rval = r_m in
       let loc = virtual_to_loc_reg rval ii in
-      read_loc MachSize.Quad loc (use_ii_with_poi ii poi) >>= to_bv
+      read_loc MachSize.Quad loc (use_ii_with_poi ii poi)
 
     let write_register (ii, poi) r_m v_m =
       let* v = v_m >>= to_int and* r = r_m in
@@ -350,7 +375,7 @@ module Make (C : Config) = struct
     let read_memory (ii, poi) addr_m datasize_m =
       let* addr = addr_m and* datasize = datasize_m in
       let sz = datasize_to_machsize datasize in
-      read_loc sz (A.Location_global addr) (use_ii_with_poi ii poi) >>= to_bv
+      read_loc sz (A.Location_global addr) (use_ii_with_poi ii poi)
 
     let write_memory (ii, poi) = function
       | [ addr_m; datasize_m; value_m ] ->
@@ -368,7 +393,7 @@ module Make (C : Config) = struct
     let loc_sp ii = A.Location_reg (ii.A.proc, ASLBase.ArchReg AArch64Base.SP)
 
     let read_sp (ii, poi) () =
-      read_loc MachSize.Quad (loc_sp ii) (use_ii_with_poi ii poi) >>= to_bv
+      read_loc MachSize.Quad (loc_sp ii) (use_ii_with_poi ii poi)
 
     let write_sp (ii, poi) v_m =
       let* v = v_m >>= to_int in
@@ -376,7 +401,7 @@ module Make (C : Config) = struct
 
     let read_pstate_nzcv (ii, poi) () =
       let loc = A.Location_reg (ii.A.proc, ASLBase.ArchReg AArch64Base.NZCV) in
-      read_loc MachSize.Quad loc (use_ii_with_poi ii poi) >>= to_bv
+      read_loc MachSize.Quad loc (use_ii_with_poi ii poi)
 
     let write_pstate_nzcv (ii, poi) v_m =
       let loc = A.Location_reg (ii.A.proc, ASLBase.ArchReg AArch64Base.NZCV) in
@@ -400,7 +425,7 @@ module Make (C : Config) = struct
       M.op1 (Op.Sxt (datasize_to_machsize n)) v
 
     let uint bv_m = bv_m >>= to_int
-    let sint bv_m = bv_m >>= M.op1 Op.Not >>= to_int >>= M.op1 (Op.AddK 1)
+    let sint bv_m = bv_m >>= unop NOT >>= to_int >>= binop PLUS V.one
     let processor_id (ii, _poi) () = return (V.intToV ii.A.proc)
 
     (**************************************************************************)
