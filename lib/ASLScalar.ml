@@ -174,13 +174,13 @@ let convert_to_int_signed = function
   | S_Int _ as s -> s
   | S_Bool false -> S_Int Int64.zero
   | S_Bool true -> S_Int Int64.one
-  | S_BitVector bv -> S_Int (BV.to_int64_unsigned bv)
+  | S_BitVector bv -> S_Int (BV.to_int64_signed bv)
 
 let convert_to_int_unsigned = function
   | S_Int _ as s -> s
   | S_Bool false -> S_Int Int64.zero
   | S_Bool true -> S_Int Int64.one
-  | S_BitVector bv -> S_Int (BV.to_int64_signed bv)
+  | S_BitVector bv -> S_Int (BV.to_int64_unsigned bv)
 
 let convert_to_bool = function
   | S_Int i -> S_Bool (not (Int64.equal i 0L))
@@ -208,6 +208,13 @@ let try_concat s1 s2 =
   match (s1, s2) with
   | S_BitVector bv1, S_BitVector bv2 ->
       Some (S_BitVector (BV.concat [ bv1; bv2 ]))
+  | _ -> None
+
+let try_write_slice positions dst src =
+  match (dst, src) with
+  | S_BitVector dst, S_BitVector src ->
+      if List.exists (( <= ) (BV.length dst)) positions then None
+      else Some (S_BitVector (BV.write_slice dst src positions))
   | _ -> None
 
 let empty = S_BitVector BV.empty

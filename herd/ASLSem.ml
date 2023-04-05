@@ -174,10 +174,10 @@ module Make (C : Config) = struct
       match v with
       | V.Val (Constant.Concrete (ASLScalar.S_Int _)) -> return v
       | V.Var _ | V.Val (Constant.Concrete _) ->
-          M.op1 (Op.ArchOp1 ASLValue.ToIntS) v
+          M.op1 (Op.ArchOp1 ASLValue.ToIntU) v
       | v ->
           let v' = V.fresh_var () in
-          M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToIntS, v)) ]
+          M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToIntU, v)) ]
           >>! v'
 
     let to_int_signed v =
@@ -221,7 +221,8 @@ module Make (C : Config) = struct
     let choice (m1 : V.v M.t) (m2 : 'b M.t) (m3 : 'b M.t) : 'b M.t =
       M.bind_ctrl_seq_data m1 (function
         | V.Val (Constant.Concrete (ASLScalar.S_Bool b)) -> if b then m2 else m3
-        | b -> M.bind_ctrl_seq_data (to_int_signed b) (fun v -> M.choiceT v m2 m3))
+        | b ->
+            M.bind_ctrl_seq_data (to_int_signed b) (fun v -> M.choiceT v m2 m3))
 
     let binop =
       let open AST in
@@ -338,16 +339,8 @@ module Make (C : Config) = struct
       M.op1 (Op.ArchOp1 arch_op1) bvs
 
     let write_to_bitvector positions w v =
-      let bv_src, bv_dst =
-        match (w, v) with
-        | ( V.Val (Constant.Concrete (ASLScalar.S_BitVector bv_src)),
-            V.Val (Constant.Concrete (ASLScalar.S_BitVector bv_dst)) ) ->
-            (bv_src, bv_dst)
-        | _ -> Warn.fatal "Not yet implemented: writing to symbolic bitvector"
-      in
       let positions = Asllib.ASTUtils.slices_to_positions v_as_int positions in
-      let bv_res = Asllib.Bitvector.write_slice bv_dst bv_src positions in
-      return (V.Val (Constant.Concrete (ASLScalar.S_BitVector bv_res)))
+      M.op (Op.ArchOp (ASLValue.BVSliceSet positions)) v w
 
     let concat_bitvectors bvs =
       let bvs =

@@ -2,8 +2,15 @@ module ASLConstant = SymbConstant.Make (ASLScalar) (PteVal.No) (ASLBase.Instr)
 module ASLPteVal = ASLConstant.PteVal
 module ASLInstr = ASLConstant.Instr
 
-type asl_op = Set of int | Concat
-type asl_op1 = Get of int | BVSlice of int list | ToIntU | ToIntS | ToBool | ToBV
+type asl_op = Set of int | Concat | BVSliceSet of int list
+
+type asl_op1 =
+  | Get of int
+  | BVSlice of int list
+  | ToIntU
+  | ToIntS
+  | ToBool
+  | ToBV
 
 module ASLArchOp :
   ArchOp.S
@@ -23,6 +30,10 @@ module ASLArchOp :
   let pp_op = function
     | Set i -> Printf.sprintf "Set[%d]" i
     | Concat -> "Concat"
+    | BVSliceSet positions ->
+        Printf.sprintf "SliceSet[%s]"
+        @@ String.concat ", "
+        @@ List.map string_of_int positions
 
   let pp_op1 _hexa = function
     | Get i -> Printf.sprintf "Get[%d]" i
@@ -63,6 +74,11 @@ module ASLArchOp :
         let* s2 = as_concrete c2 in
         let* s = ASLScalar.try_concat s1 s2 in
         return_concrete s
+    | BVSliceSet positions ->
+        let* s1 = as_concrete c1 in
+        let* s2 = as_concrete c2 in
+        let* s = ASLScalar.try_write_slice positions s1 s2 in
+        return_concrete s
 
   let do_op1 op cst =
     match op with
@@ -71,12 +87,14 @@ module ASLArchOp :
         List.nth_opt vec i
     | ToIntS -> (
         match cst with
-        | Constant.Concrete s -> ASLScalar.convert_to_int_signed s |> return_concrete
+        | Constant.Concrete s ->
+            ASLScalar.convert_to_int_signed s |> return_concrete
         | Constant.Symbolic _ -> Some cst
         | _ -> None)
     | ToIntU -> (
         match cst with
-        | Constant.Concrete s -> ASLScalar.convert_to_int_unsigned s |> return_concrete
+        | Constant.Concrete s ->
+            ASLScalar.convert_to_int_unsigned s |> return_concrete
         | Constant.Symbolic _ -> Some cst
         | _ -> None)
     | ToBV -> (

@@ -490,6 +490,38 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
             Some (A.Location_reg (ii.A.proc, reg))
         | ASLS.A.Location_reg (_proc, ASLBase.ASLLocalId _) -> None
 
+      let mask_of_positions =
+        let mask_one acc i =
+          let open Int64 in
+          shift_left 1L i |> lognot |> logor acc
+        in
+        List.fold_left mask_one (-1L)
+
+      let group_by_continuous =
+        let rec aux prec start length acc = function
+          | [] -> (start, length) :: acc
+          | h :: t ->
+              if prec = h + 1 then aux h start (length + 1) acc t
+              else aux h h 1 ((start, length) :: acc) t
+        in
+        function [] -> [] | h :: t -> aux h h 1 [] t
+
+      let extract_bits_to dst_pos src src_pos n acc =
+        if n >= 64 then Warn.fatal "Can't handle values with more than 64 bits."
+        else
+          let shifted_v, acc =
+            let shift = src_pos - dst_pos in
+            if shift = 0 then (src, acc)
+            else
+              let dir =
+                if shift > 0 then Op.LogicalRightShift shift
+                else Op.LeftShift ~-shift
+              in
+              declare (M.VC.Unop (dir, src)) acc
+          in
+          let mask = ((1 lsl n) - 1) lsl (dst_pos - n) in
+          (M.VC.Unop (Op.AndK (string_of_int mask), shifted_v), acc)
+
       let tr_arch_op arch_op acc (v1 : ASLValue.V.v) (v2 : ASLValue.V.v) =
         match arch_op with
         | ASLValue.Set _ ->
@@ -515,6 +547,28 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
             | _ ->
                 Warn.fatal "Cannot translate concatenation of %s and %s."
                   (ASLValue.V.pp_v v1) (ASLValue.V.pp_v v2))
+        | ASLValue.BVSliceSet positions -> (
+            let dst = tr_v v1 and src = tr_v v2 in
+            match group_by_continuous positions with
+            | [] -> (atom dst, acc)
+            | [ (63, 64) ] -> (atom src, acc)
+            | (x, n) :: t ->
+                let folder (prec, acc, i) (x, n) =
+                  let w, acc = extract_bits_to x src i n acc in
+                  let nw, acc = declare w acc in
+                  let nprec, acc = declare prec acc in
+                  (M.VC.Binop (Op.Or, nw, nprec), acc, i + n)
+                in
+                let first, acc = extract_bits_to x src 0 n acc in
+                let w, acc, _ = List.fold_left folder (first, acc, n) t in
+                let nw, acc = declare w acc in
+                let mask =
+                  mask_of_positions positions |> Int64.to_string |> V.stringToV
+                in
+                let masked_dst, acc =
+                  declare (M.VC.Binop (Op.And, mask, dst)) acc
+                in
+                (M.VC.Binop (Op.Or, nw, masked_dst), acc))
 
       let tr_op =
         let open Op in
@@ -574,37 +628,11 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
         | ASLValue.ToBool -> (M.VC.Binop (Op.Ne, V.zero, v), acc)
         | ASLValue.ToBV -> (atom v, acc)
         | ASLValue.BVSlice positions -> (
-            let extract_bits_to dst_pos src_pos n acc =
-              if n >= 64 then
-                Warn.fatal "Can't handle values with more than 64 bits."
-              else
-                let shifted_v, acc =
-                  let shift = src_pos - dst_pos in
-                  if shift = 0 then (v, acc)
-                  else
-                    let dir =
-                      if shift > 0 then Op.LogicalRightShift shift
-                      else Op.LeftShift ~-shift
-                    in
-                    declare (M.VC.Unop (dir, v)) acc
-                in
-                let mask = ((1 lsl n) - 1) lsl (dst_pos - n) in
-                (M.VC.Unop (Op.AndK (string_of_int mask), shifted_v), acc)
-            in
             let folder (prec, acc, i) (x, n) =
-              let w, acc = extract_bits_to i x n acc in
+              let w, acc = extract_bits_to i v x n acc in
               let nw, acc = declare w acc in
               let nprec, acc = declare prec acc in
               (M.VC.Binop (Op.Or, nw, nprec), acc, i + n)
-            in
-            let group_by_continuous =
-              let rec aux prec start length acc = function
-                | [] -> (start, length) :: acc
-                | h :: t ->
-                    if prec = h + 1 then aux h start (length + 1) acc t
-                    else aux h h 1 ((start, length) :: acc) t
-              in
-              function [] -> [] | h :: t -> aux h h 1 [] t
             in
             match group_by_continuous positions with
             | [] -> (atom V.zero, acc)
@@ -615,7 +643,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
             | (x, n) :: t ->
                 let first, acc =
                   if n = 1 then (M.VC.Unop (Op.ReadBit x, v), acc)
-                  else extract_bits_to 0 x n acc
+                  else extract_bits_to 0 v x n acc
                 in
                 let w, acc, _ = List.fold_left folder (first, acc, n) t in
                 (w, acc))

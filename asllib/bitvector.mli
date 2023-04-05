@@ -72,6 +72,10 @@ val compare : t -> t -> int
 (** The comparison function for bitvectors, with the same specification as
     [Stdlib.compare]. *)
 
+val sign_extend : int -> t -> t
+(** [sign_extend nbytes bv] returns a copy of bv of length [8*nbytes],
+    left-padded with [bv]'s bit-sign. *)
+
 val bitcount : t -> int
 (** Returns the number of bits set to 1. *)
 
