@@ -74,7 +74,7 @@ struct
     | A.Instruction ins ->
         let start,new_rets =
           load_code proc (addr+4) mem rets code in
-        let new_ins = A.V.Cst.Instr.convert_if_imm_branch addr mem ins in
+        let new_ins = A.convert_if_imm_branch addr mem ins in
         let new_start = (addr,new_ins)::start in
         let newer_rets = IntMap.add addr (proc,new_start)  new_rets in
         new_start,newer_rets
