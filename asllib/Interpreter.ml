@@ -299,9 +299,10 @@ module Make (B : Backend.S) = struct
         let* v = eval_expr env scope e in
         B.unop op v
     | E_Cond (e1, e2, e3) ->
-        B.bind_ctrl
-          (B.choice (eval_expr env scope e1) (return e2) (return e3))
-          (eval_expr env scope)
+        B.bind_ctrl (eval_expr env scope e1) (fun v ->
+            B.ternary v
+              (fun () -> eval_expr env scope e2)
+              (fun () -> eval_expr env scope e3))
     | E_Slice (e', slices) ->
         let* positions = eval_slices env (to_pos e) scope slices
         and* v = eval_expr env scope e' in

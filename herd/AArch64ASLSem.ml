@@ -712,13 +712,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
           match to_do with [] -> acc | _ -> loop to_do acc
         in
         let to_do = map_diff_key !csym_tbl IMap.empty in
-        let res = loop to_do acc in
-        let () =
-          if _dbg then
-            Format.eprintf "Constraints translated into %s. @."
-              (M.VC.pp_cnstrnts res)
-        in
-        res
+        loop to_do acc
 
       let event_to_monad ii is_data event =
         let { ASLE.action; ASLE.iiid; _ } = event in

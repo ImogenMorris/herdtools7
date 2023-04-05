@@ -72,6 +72,11 @@ module NativeBackend = struct
   let binop op v1 v2 () =
     StaticInterpreter.binop ASTUtils.dummy_annotated op v1 v2
 
+  let ternary = function
+    | V_Bool true -> fun m_true _m_false -> m_true ()
+    | V_Bool false -> fun _m_true m_false -> m_false ()
+    | v -> mismatch_type v [ T_Bool ]
+
   let unop op v () = StaticInterpreter.unop ASTUtils.dummy_annotated op v
   let on_write_identifier _x _scope _value = return ()
   let on_read_identifier _x _scope _value = return ()

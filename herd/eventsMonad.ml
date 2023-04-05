@@ -44,7 +44,7 @@ and type evt_struct = E.event_structure) =
         (struct
           let hexa = C.hexa
           let debug = C.debug.Debug_herd.solver
-          let keep_failed_as_undetermined = C.variant Variant.ASL
+          let keep_failed_as_undetermined = C.variant Variant.ASL_AArch64
         end)
         (A)
 

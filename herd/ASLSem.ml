@@ -267,6 +267,14 @@ module Make (C : Config) = struct
               M.restrict M.VC.[ Assign (v', Unop (Op.Inv, v)) ] >>! v'
           | v -> M.op1 Op.Inv v >>= to_bv)
 
+    let ternary = function
+      | V.Val (Constant.Concrete (ASLScalar.S_Bool true)) -> fun m1 _ -> m1 ()
+      | V.Val (Constant.Concrete (ASLScalar.S_Bool false)) -> fun _ m2 -> m2 ()
+      | v ->
+          fun m1 m2 ->
+            let* v1 = m1 () and* v2 = m2 () and* v = to_int v in
+            M.op3 Op.If v v1 v2
+
     let on_write_identifier (ii, poi) x scope v =
       let loc = loc_of_scoped_id ii x scope in
       let action = Act.Access (Dir.W, loc, v, MachSize.Quad) in
@@ -424,8 +432,10 @@ module Make (C : Config) = struct
       let* v = v_m and* n = n_m in
       M.op1 (Op.Sxt (datasize_to_machsize n)) v
 
-    let uint bv_m = bv_m >>= to_int
-    let sint bv_m = bv_m >>= unop NOT >>= to_int >>= binop PLUS V.one
+    let uint bv_m =
+      bv_m >>= unop NOT >>= to_int >>= binop PLUS V.one >>= unop NEG
+
+    let sint bv_m = bv_m >>= to_int
     let processor_id (ii, _poi) () = return (V.intToV ii.A.proc)
 
     (**************************************************************************)
@@ -540,6 +550,7 @@ module Make (C : Config) = struct
         let on_read_identifier = on_read_identifier ii_env
         let binop = binop
         let unop = unop
+        let ternary = ternary
         let create_vector = create_vector
         let get_i = get_i
         let set_i = set_i

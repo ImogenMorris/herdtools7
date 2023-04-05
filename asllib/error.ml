@@ -1,6 +1,6 @@
 open AST
 
-type error =
+type error_desc =
   | BadField of string * ty
   | BadFields of string list * ty
   | TypeInferenceNeeded
@@ -17,9 +17,11 @@ type error =
   | CannotParse
   | UnknownSymbol
 
-exception ASLException of error annotated
+type error = error_desc annotated
 
-type 'a result = ('a, error annotated) Result.t
+exception ASLException of error
+
+type 'a result = ('a, error) Result.t
 
 let fatal e = raise (ASLException e)
 let fatal_from pos e = fatal (ASTUtils.add_pos_from pos e)
