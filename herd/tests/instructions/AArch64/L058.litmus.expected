@@ -1,0 +1,10 @@
+Test L058 Allowed
+States 1
+0:X1=instr:"B .+4"; 0:X2=instr:"B .+4"; 0:X3=1;
+No
+Witnesses
+Positive: 0 Negative: 1
+Condition exists (0:X3=0)
+Observation L058 Never 0 1
+Hash=fc2741988c504fee73989498f21e3de5
+
