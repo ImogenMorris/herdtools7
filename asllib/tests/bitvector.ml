@@ -136,8 +136,8 @@ let test_with_int64 () =
     in
     assert (BV.equal (BV.of_int64 i) (BV.of_string s));
     assert (String.equal (BV.to_string (BV.of_int64 i)) s);
-    assert (Int64.equal i (BV.to_int64 (BV.of_string s)));
-    assert (Int64.equal i (BV.to_int64 (BV.of_int64 i)))
+    assert (Int64.equal i (BV.to_int64_unsigned (BV.of_string s)));
+    assert (Int64.equal i (BV.to_int64_unsigned (BV.of_int64 i)))
   in
   List.iter one
     [

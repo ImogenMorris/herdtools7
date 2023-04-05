@@ -139,7 +139,7 @@ let to_int (length, data) =
   else ();
   !result
 
-let to_int64 (length, data) =
+let to_int64_unsigned (length, data) =
   let result = ref Int64.zero in
   let n = length / 8 and m = length mod 8 in
   for i = 0 to n - 1 do
@@ -151,6 +151,15 @@ let to_int64 (length, data) =
     result := Int64.logor !result (c lsl (n * 8) |> Int64.of_int)
   else ();
   !result
+
+let to_int64_signed (length, data) =
+  let unsigned = to_int64_unsigned (length -1, data) in
+  let sign_bit =
+    let n = length / 8 and m = length mod 8 in
+    let c = String.get data (if m = 0 then n - 1 else n) in
+    read_bit_raw (if m = 0 then 7 else m - 1) c 
+  in
+  if sign_bit = 0 then unsigned else Int64.neg unsigned
 
 let of_string s =
   let result = Buffer.create ((String.length s / 8) + 1) in

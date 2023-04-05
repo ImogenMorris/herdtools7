@@ -21,7 +21,11 @@ val to_int : t -> int
 val to_int_signed : t -> int
 (** Returns a signed integer representing the bitvector. *)
 
-val to_int64 : t -> int64
+val to_int64_unsigned : t -> int64
+(** Returns an integer representing the bitvector, little-endian. Result
+    unspecified if [length > 64]. *)
+
+val to_int64_signed : t -> int64
 (** Returns an integer representing the bitvector, little-endian. Result
     unspecified if [length > 64]. *)
 

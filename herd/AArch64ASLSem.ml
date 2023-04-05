@@ -569,7 +569,8 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
       let tr_arch_op1 op acc v =
         let v = tr_v v in
         match op with
-        | ASLValue.ToInt -> (atom v, acc)
+        | ASLValue.ToIntS -> (atom v, acc)
+        | ASLValue.ToIntU -> (atom v, acc)
         | ASLValue.ToBool -> (M.VC.Binop (Op.Ne, V.zero, v), acc)
         | ASLValue.ToBV -> (atom v, acc)
         | ASLValue.BVSlice positions -> (

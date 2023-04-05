@@ -170,14 +170,24 @@ module Make (C : Config) = struct
           M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToBV, v)) ]
           >>! v'
 
-    let to_int v =
+    let to_int_unsigned v =
       match v with
       | V.Val (Constant.Concrete (ASLScalar.S_Int _)) -> return v
       | V.Var _ | V.Val (Constant.Concrete _) ->
-          M.op1 (Op.ArchOp1 ASLValue.ToInt) v
+          M.op1 (Op.ArchOp1 ASLValue.ToIntS) v
       | v ->
           let v' = V.fresh_var () in
-          M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToInt, v)) ]
+          M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToIntS, v)) ]
+          >>! v'
+
+    let to_int_signed v =
+      match v with
+      | V.Val (Constant.Concrete (ASLScalar.S_Int _)) -> return v
+      | V.Var _ | V.Val (Constant.Concrete _) ->
+          M.op1 (Op.ArchOp1 ASLValue.ToIntS) v
+      | v ->
+          let v' = V.fresh_var () in
+          M.restrict M.VC.[ Assign (v', Unop (Op.ArchOp1 ASLValue.ToIntS, v)) ]
           >>! v'
 
     (**************************************************************************)
@@ -211,7 +221,7 @@ module Make (C : Config) = struct
     let choice (m1 : V.v M.t) (m2 : 'b M.t) (m3 : 'b M.t) : 'b M.t =
       M.bind_ctrl_seq_data m1 (function
         | V.Val (Constant.Concrete (ASLScalar.S_Bool b)) -> if b then m2 else m3
-        | b -> M.bind_ctrl_seq_data (to_int b) (fun v -> M.choiceT v m2 m3))
+        | b -> M.bind_ctrl_seq_data (to_int_signed b) (fun v -> M.choiceT v m2 m3))
 
     let binop =
       let open AST in
@@ -272,7 +282,7 @@ module Make (C : Config) = struct
       | V.Val (Constant.Concrete (ASLScalar.S_Bool false)) -> fun _ m2 -> m2 ()
       | v ->
           fun m1 m2 ->
-            let* v1 = m1 () and* v2 = m2 () and* v = to_int v in
+            let* v1 = m1 () and* v2 = m2 () and* v = to_int_signed v in
             M.op3 Op.If v v1 v2
 
     let on_write_identifier (ii, poi) x scope v =
@@ -376,7 +386,7 @@ module Make (C : Config) = struct
       read_loc MachSize.Quad loc (use_ii_with_poi ii poi)
 
     let write_register (ii, poi) r_m v_m =
-      let* v = v_m >>= to_int and* r = r_m in
+      let* v = v_m >>= to_int_signed and* r = r_m in
       let loc = virtual_to_loc_reg r ii in
       write_loc MachSize.Quad loc v (use_ii_with_poi ii poi) >>! []
 
@@ -404,7 +414,7 @@ module Make (C : Config) = struct
       read_loc MachSize.Quad (loc_sp ii) (use_ii_with_poi ii poi)
 
     let write_sp (ii, poi) v_m =
-      let* v = v_m >>= to_int in
+      let* v = v_m >>= to_int_signed in
       write_loc MachSize.Quad (loc_sp ii) v (use_ii_with_poi ii poi) >>! []
 
     let read_pstate_nzcv (ii, poi) () =
@@ -413,7 +423,7 @@ module Make (C : Config) = struct
 
     let write_pstate_nzcv (ii, poi) v_m =
       let loc = A.Location_reg (ii.A.proc, ASLBase.ArchReg AArch64Base.NZCV) in
-      let* v = v_m >>= to_int in
+      let* v = v_m >>= to_int_signed in
       write_loc MachSize.Quad loc v (use_ii_with_poi ii poi) >>! []
 
     let replicate bv_m v_m =
@@ -432,10 +442,8 @@ module Make (C : Config) = struct
       let* v = v_m and* n = n_m in
       M.op1 (Op.Sxt (datasize_to_machsize n)) v
 
-    let uint bv_m =
-      bv_m >>= unop NOT >>= to_int >>= binop PLUS V.one >>= unop NEG
-
-    let sint bv_m = bv_m >>= to_int
+    let uint bv_m = bv_m >>= to_int_unsigned
+    let sint bv_m = bv_m >>= to_int_signed
     let processor_id (ii, _poi) () = return (V.intToV ii.A.proc)
 
     (**************************************************************************)

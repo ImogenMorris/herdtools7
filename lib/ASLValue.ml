@@ -3,7 +3,7 @@ module ASLPteVal = ASLConstant.PteVal
 module ASLInstr = ASLConstant.Instr
 
 type asl_op = Set of int | Concat
-type asl_op1 = Get of int | BVSlice of int list | ToInt | ToBool | ToBV
+type asl_op1 = Get of int | BVSlice of int list | ToIntU | ToIntS | ToBool | ToBV
 
 module ASLArchOp :
   ArchOp.S
@@ -29,7 +29,8 @@ module ASLArchOp :
     | BVSlice positions ->
         Printf.sprintf "Slice[%s]" @@ String.concat ", "
         @@ List.map string_of_int positions
-    | ToInt -> "ToInt"
+    | ToIntU -> "ToIntU"
+    | ToIntS -> "ToIntS"
     | ToBool -> "ToBool"
     | ToBV -> "ToBV"
 
@@ -68,9 +69,14 @@ module ASLArchOp :
     | Get i ->
         let* vec = as_concrete_vector cst in
         List.nth_opt vec i
-    | ToInt -> (
+    | ToIntS -> (
         match cst with
-        | Constant.Concrete s -> ASLScalar.convert_to_int s |> return_concrete
+        | Constant.Concrete s -> ASLScalar.convert_to_int_signed s |> return_concrete
+        | Constant.Symbolic _ -> Some cst
+        | _ -> None)
+    | ToIntU -> (
+        match cst with
+        | Constant.Concrete s -> ASLScalar.convert_to_int_unsigned s |> return_concrete
         | Constant.Symbolic _ -> Some cst
         | _ -> None)
     | ToBV -> (
