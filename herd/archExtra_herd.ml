@@ -320,10 +320,9 @@ module Make(C:Config) (I:I) : S with module I = I
       type instr = I.V.Cst.Instr.t
       type code = (int * instr) list
 
-      (* When variant -self is enabled, fail trying to convert a branch
-         instruction to a label into a branch-with-offset representation.
-         This function needs to be reimplemented by architectures for
-         "variant -self". *)
+      (* This function is a default behaviour for all architectures.
+         When variant -self is enabled, it fails trying to convert a branch
+         instruction to a label into a branch-with-offset representation. *)
       let convert_if_imm_branch _ _ _ i =
         if C.variant Variant.Self then
           Warn.fatal "Functionality %s not implemented for -variant self" "convert_if_imm_branch"
