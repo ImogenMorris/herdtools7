@@ -33,6 +33,9 @@ let func_start_addr proc = function
   | MiscParser.Main -> (proc + 1) * proc_size
   | MiscParser.FaultHandler -> (proc + 1) * proc_size + func_size
 
+let same_proc a1 a2 =
+   0 = Int.compare (a1 / proc_size) (a2 / proc_size)
+
 module Make(A:Arch_herd.S) =
 struct
 
@@ -51,12 +54,12 @@ struct
       | A.Instruction _ ->
             preload_labels proc (addr+4) mem code
       | A.Label (lbl,ins) ->
-          let mem =
-            preload_labels proc addr mem (ins::code) in
+        let next_mem =
           if Label.Map.mem lbl mem then
             Warn.user_error
               "Label %s occurs more that once" lbl ;
-          Label.Map.add lbl addr mem
+          Label.Map.add lbl addr mem in
+          preload_labels proc addr next_mem (ins::code)
       | A.Symbolic _
       | A.Macro (_,_) -> assert false
       end
@@ -74,7 +77,7 @@ struct
     | A.Instruction ins ->
         let start,new_rets =
           load_code proc (addr+4) mem rets code in
-        let new_ins = A.convert_if_imm_branch addr mem ins in
+        let new_ins = A.convert_if_imm_branch addr mem same_proc ins in
         let new_start = (addr,new_ins)::start in
         let newer_rets = IntMap.add addr (proc,new_start)  new_rets in
         new_start,newer_rets

@@ -71,7 +71,7 @@ module type S = sig
   type instr = I.V.Cst.Instr.t
   type code = (int * instr) list
 
-  val convert_if_imm_branch : int -> int Label.Map.t -> instr -> instr
+  val convert_if_imm_branch : int -> int Label.Map.t -> (int -> int -> bool) -> instr -> instr
 
   (* Program loaded in memory *)
   type program = int Label.Map.t
@@ -324,7 +324,7 @@ module Make(C:Config) (I:I) : S with module I = I
          instruction to a label into a branch-with-offset representation.
          This function needs to be reimplemented by architectures for
          "variant -self". *)
-      let convert_if_imm_branch _ _ i =
+      let convert_if_imm_branch _ _ _ i =
         if C.variant Variant.Self then
           Warn.fatal "Functionality %s not implemented for -variant self" "convert_if_imm_branch"
         else

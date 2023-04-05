@@ -361,17 +361,23 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
           module FaultType = FaultType.AArch64
         end)
 
-    let convert_if_imm_branch pc l2i =
+    let convert_if_imm_branch pc l2i same_proc instr =
       let open BranchTarget in
       let labelmap l =
-        let tgt = Label.Map.find l l2i in
-        let toofar = (tgt / 1000) != (pc / 1000) in
-        if toofar then
-          Warn.fatal "An indirect branch and its destination label must be on the same thread"
-        else
+        let tgt =
+          try Label.Map.find l l2i 
+          with Not_found -> Warn.user_error
+            "Label %s not found, although used in a branch %s"
+            l (pp_instruction PPMode.Ascii instr)
+          in
+        if same_proc pc tgt then
           tgt - pc
+        else
+          Warn.user_error
+            "The branch %s and its destination label %s must be on the same proc"
+            (pp_instruction PPMode.Ascii instr) l
         in
-      function
+      match instr with
       | I_B (Lbl l) -> I_B (Offset (labelmap l))
       | I_BC (c,(Lbl l)) -> I_BC (c,(Offset (labelmap l)))
       | I_BL (Lbl l) -> I_BL (Offset (labelmap l))
@@ -379,7 +385,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_CBZ (v,r,(Lbl l)) -> I_CBZ (v,r,(Offset (labelmap l)))
       | I_TBNZ (v,r,k,(Lbl l)) -> I_TBNZ (v,r,k,(Offset (labelmap l)))
       | I_TBZ (v,r,k,(Lbl l)) -> I_TBZ (v,r,k,(Offset (labelmap l)))
-      | instr -> instr
+      | _ -> instr
 
     module MemType = MemoryType.No
 

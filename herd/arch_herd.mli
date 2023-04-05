@@ -52,7 +52,7 @@ module type S =
       val inv_all : op -> bool
     end
 
-    val convert_if_imm_branch : int -> int Label.Map.t -> instruction -> instruction
+    val convert_if_imm_branch : int -> int Label.Map.t -> (int -> int -> bool) -> instruction -> instruction
 
     module MemType:MemoryType.S
 
