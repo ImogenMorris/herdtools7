@@ -62,7 +62,7 @@ module Make(V:Constant.S)(C:Config) =
         sprintf "%s%s%s"
           memo (pp_setflags s) (pp_cond c) in
       { empty_ins with
-        memo=memo^ " ^o0,^i0,^i1";
+        memo=memo^ " ^o0,^qi0,^i1";
         inputs=[rA; rB];
         outputs=[rD]; cond=is_cond c; }
 
@@ -116,14 +116,14 @@ module Make(V:Constant.S)(C:Config) =
     let ldm2 ra r1 r2 i =
       let memo = sprintf "%s%s" "ldm" (pp_incr i) in
       { empty_ins with
-        memo = sprintf "%s ^o0,{^o0, ^o0}" memo ;
+        memo = sprintf "%s ^i0,{^o0, ^o1}" memo ;
         inputs = [ra] ;
         outputs = [r1;r2] ; }
 
     let ldm3 ra r1 r2 r3 i =
       let memo = sprintf "%s%s" "ldm" (pp_incr i) in
       { empty_ins with
-        memo = sprintf "%s ^o0,{^o0, ^o0, ^o0}" memo ;
+        memo = sprintf "%s ^i0,{^o0, ^o1, ^o2}" memo ;
         inputs = [ra] ;
         outputs = [r1;r2;r3] ; }
 
@@ -131,7 +131,7 @@ module Make(V:Constant.S)(C:Config) =
       let memo = "ldrd" in
       let os = match os with | Some k -> sprintf ", #%i" k | _ -> "" in
       { empty_ins with
-        memo = sprintf "%s ^o0, ^o0, [^o0%s]" memo os ;
+        memo = sprintf "%s ^o0, ^o1, [^i0%s]" memo os ;
         inputs = [r3] ;
         outputs = [r1;r2] ; }
 
@@ -201,9 +201,8 @@ module Make(V:Constant.S)(C:Config) =
     let bx r =
       { empty_ins with
         memo = sprintf "bx ^i0" ;
-        inputs = [r] ;
-        outputs = [] ;
-        branch=[Next] ; }
+        inputs = [r] ; reg_env = [r,CType.voidstar];
+        branch=[Any] ; }
 
     let bcc tr_lab cond lbl =
       { empty_ins with
