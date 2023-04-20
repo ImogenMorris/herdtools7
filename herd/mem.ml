@@ -742,6 +742,12 @@ let match_reg_events es =
         let stores = map_loc_find loc loc_stores in
         List.fold_right
           (fun er k ->
+            if dbg then begin
+              Printf.eprintf
+                "load=%a: {%s}\n%!" E.debug_event er
+              (String.concat ","
+               (List.map E.debug_event_str stores))
+            end ;
             let rf =
               List.fold_left
                 (fun rf ew ->
