@@ -1,10 +1,10 @@
 Test A005 Required
 States 1
-0:R1=1; 0:R2=1; 0:R4=1; 0:R5=1;
+0:R2=1; 0:R3=1; 0:R4=1; 0:R5=1;
 Ok
 Witnesses
 Positive: 1 Negative: 0
-Condition forall (0:R1=1 /\ 0:R2=1 /\ 0:R4=1 /\ 0:R5=1)
+Condition forall (0:R2=1 /\ 0:R3=1 /\ 0:R4=1 /\ 0:R5=1)
 Observation A005 Always 1 0
-Hash=db58ae776bf50c09ab6ce83bc75f0637
+Hash=afad8df5dbf04b59b889b889ad2b7285
 

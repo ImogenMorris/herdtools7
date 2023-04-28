@@ -94,7 +94,7 @@ module Make(V:Constant.S)(C:Config) =
       let memo = "movt" in
       { empty_ins with
         memo = sprintf "%s ^o0,#%i" memo i ;
-        inputs = [] ;
+        inputs = [r1] ;
         outputs = [r1]; }
 
     let mov c r1 r2 =
