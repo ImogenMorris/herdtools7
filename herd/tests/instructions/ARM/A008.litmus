@@ -1,5 +1,6 @@
 ARM A008
 
+Stable=R1,R2,R3
 (* Tests LDM (3-reg variant) *)
 { int x[3] = {1,2,3}; 0:R0 = x}
 
