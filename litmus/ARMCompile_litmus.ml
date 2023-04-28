@@ -133,7 +133,8 @@ module Make(V:Constant.S)(C:Config) =
       { empty_ins with
         memo = sprintf "%s ^o0, ^o1, [^i0%s]" memo os ;
         inputs = [r3] ;
-        outputs = [r1;r2] ; }
+        outputs = [r1;r2] ;
+        reg_env = [(r3,CType.voidstar);(r1,CType.word);(r2,CType.word)]; }
 
 
     let ldr2k c r1 r2 i =
