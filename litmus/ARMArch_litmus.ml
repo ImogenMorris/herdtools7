@@ -106,7 +106,7 @@ module Make(O:Arch_litmus.Config)(V:Constant.S) = struct
         O.oi "ins_t r;" ;
         O.oi "asm __volatile__ (" ;
         O.fii "%S" "adr %[x1],0f\n\t" ;
-        O.fii "%S" "ldr %w[x2],[%[x1]]\n\t" ;
+        O.fii "%S" "ldr %[x2],[%[x1]]\n\t" ;
         O.fii "%S" "b 1f\n" ;
         O.fii "%S" "0:\n\t" ;
         O.fii "\"%s\\n\"" (lower_instr i) ;

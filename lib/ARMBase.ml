@@ -604,4 +604,10 @@ let get_id_and_list _i = Warn.fatal "get_id_and_list is only for Bell"
 
 let hash_pteval _ = assert false
 
-module Instr = Instr.No(struct type instr = instruction end)
+module Instr =
+  Instr.WithNop
+    (struct
+      type instr = instruction
+      let nop = I_NOP
+      let compare = compare
+    end)
