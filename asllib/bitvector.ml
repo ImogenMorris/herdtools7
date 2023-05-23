@@ -78,7 +78,8 @@ let string_for_all p s =
   let rec loop i =
     if i = n then true
     else if p (String.unsafe_get s i) then loop (succ i)
-    else false in
+    else false
+  in
   loop 0
 
 (** [remask bv] ensures that the extra bits on the trailing character are '0'.
@@ -330,6 +331,19 @@ let bitcount (_length, data) =
   (* Here Filliatre caches the count in an array, but we are not yet there. *)
   let folder acc c = acc + one_byte (Char.code c) in
   string_fold_left folder 0 data
+
+let log2 =
+  let rec loop acc i = if i <= 0 then acc else loop (acc + 1) (i lsr 1) in
+  loop 0
+
+let highest_set_bit (_length, data) =
+  let rec loop i =
+    if i < 0 then 0
+    else
+      let c = String.get data i |> Char.code in
+      if c != 0 then log2 c + (8 * i) else loop (i - 1)
+  in
+  loop (String.length data - 1)
 
 let to_int_signed (length, data) =
   if length = 0 then 0

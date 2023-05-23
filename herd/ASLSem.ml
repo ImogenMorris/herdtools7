@@ -559,7 +559,12 @@ module Make (C : Config) = struct
         let write_to_bitvector = write_to_bitvector
         let concat_bitvectors = concat_bitvectors
       end in
-      let module ASLInterpreter = Asllib.Interpreter.Make (ASLBackend) in
+      let module Config = struct
+        let type_checking_strictness : Asllib.Typing.strictness =
+          if false then `Warn else `Silence
+      end in
+      let module ASLInterpreter = Asllib.Interpreter.Make (ASLBackend) (Config)
+      in
       let ast =
         if C.variant Variant.ASL_AArch64 then
           let build ?ast_type version fname =

@@ -51,19 +51,21 @@ val of_int64 : int64 -> t
 
 val lognot : t -> t
 (** Bitwise not operation.
-    Raise [Invalid_argument "bitwise_op"] if lengths are different. *)
+
+    @raise Invalid_argument if lengths are different. *)
 
 val logand : t -> t -> t
 (** Bitwise and operation.
-    Raise [Invalid_argument "bitwise_op"] if lengths are different. *)
+
+    @raise Invalid_argument if lengths are different. *)
 
 val logor : t -> t -> t
 (** Bitwise or operation.
-    Raise [Invalid_argument "bitwise_op"] if lengths are different. *)
+    @raise Invalid_argument if lengths are different. *)
 
 val logxor : t -> t -> t
 (** Bitwise xor operation.
-    Raise [Invalid_argument "bitwise_op"] if lengths are different. *)
+    @raise Invalid_argument if lengths are different. *)
 
 val equal : t -> t -> bool
 (** [equal b1 b2] is [true] if and only if [b1] and [b2] are bitwise equal. *)
@@ -79,25 +81,29 @@ val sign_extend : int -> t -> t
 val bitcount : t -> int
 (** Returns the number of bits set to 1. *)
 
+val highest_set_bit : t -> int
+(** Returns the index of the highest set bit. *)
+
 val extract_slice : t -> int list -> t
 (** [extract_slice src positions] returns a bitvector whose [i]-th bit is the
     bit of [src] whose index is the [i]-th element of [positions].
-    Raise [Invalid_argument] if any index in positions is greater or equal to
+    @raise Invalid_argument if any index in positions is greater or equal to
     the length of [src]. *)
 
 val write_slice : t -> t -> int list -> t
 (** [write_slice dst src positions] is a copy of [dst] where each bit at index
     [i] in [src] has been written in [dst] at the index given by the [i]-th
     element of [positions].
-    Raise [Invalid_argument] if [positions] has not the same length as [src],
+    @raise Invalid_argument if [positions] has not the same length as [src],
     or any of the indexes in [positions] is greater than the length of [dst]. *)
 
 val concat : t list -> t
 (** [concat [bv2; bv1; bv0]] is the concatenation of [bv0], [bv1], and [bv2],
     in this order, i.e. if [bv0] is not empty, the following is true:
 
-        equal (extract_slice (concat [bv1; bv0]) [ 0 ]) (extract_slice bv0 [ 0 ])
-
+    {[
+    equal (extract_slice (concat [bv1; bv0]) [ 0 ]) (extract_slice bv0 [ 0 ])
+    ]}
  *)
 
 val one : t

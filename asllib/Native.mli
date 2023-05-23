@@ -17,9 +17,9 @@
 (* Hadrien Renaud, University College London, UK.                           *)
 (****************************************************************************)
 
-module NativeBackend :
-  Backend.S with type value = AST.value and type 'a m = unit -> 'a
+module NativeBackend : Backend.S with type value = AST.value and type 'a m = 'a
 
-module NativeInterpreter : Interpreter.S with module B = NativeBackend
+module NativeInterpreter (C : Interpreter.Config) :
+  Interpreter.S with module B = NativeBackend
 
-val interprete : AST.t -> unit
+val interprete : Typing.strictness -> AST.t -> unit

@@ -33,7 +33,11 @@ module type S = sig
   val run : t -> primitive list -> unit B.m
 end
 
-module Make (B : Backend.S) = struct
+module type Config = sig
+  val type_checking_strictness : Typing.strictness
+end
+
+module Make (B : Backend.S) (C : Config) = struct
   module B = B
   module IMap = ASTUtils.IMap
   module ISet = ASTUtils.ISet
@@ -154,7 +158,9 @@ module Make (B : Backend.S) = struct
       in
       List.filter is_primitive
     in
-    ast |> add_fake_primitives |> Typing.annotate_ast |> remove_fake_primitives
+    ast |> add_fake_primitives
+    |> Typing.type_check_ast C.type_checking_strictness
+    |> remove_fake_primitives
 
   (*****************************************************************************)
   (*                                                                           *)
@@ -269,6 +275,8 @@ module Make (B : Backend.S) = struct
   let lexpr_is_var le =
     match le.desc with LE_Var _ | LE_Ignore -> true | _ -> false
 
+  (** [write_identifier lenv x scope m] is lenv' such that x -> v in lenv',
+      with v being the value in m. *)
   let write_identifier lenv x scope m =
     let* v = m in
     let* () = B.on_write_identifier x scope v in

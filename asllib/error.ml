@@ -16,6 +16,9 @@ type error_desc =
   | AssertionFailed of expr
   | CannotParse
   | UnknownSymbol
+  | NoCallCandidate of string * ty list
+  | TooManyCallCandidates of string * ty list
+  | BadTypesForBinop of binop * ty * ty
 
 type error = error_desc annotated
 
@@ -35,7 +38,9 @@ let intercept f () = try Ok (f ()) with ASLException e -> Error e
 let pp_error =
   let open Format in
   let open PP in
-  let pp_comma_list = pp_print_list ~pp_sep:(fun f () -> fprintf f ",@ ") in
+  let pp_comma_list pp_elt f li =
+    pp_print_list ~pp_sep:(fun f () -> fprintf f ",@ ") pp_elt f li
+  in
   let pp_type_desc f ty = pp_ty f (ASTUtils.add_dummy_pos ty) in
   fun f e ->
     fprintf f "@[<v 0>@[<h>%a:@]@ @[<2>ASL error:@ " pp_pos e;
@@ -86,8 +91,19 @@ let pp_error =
           expected
     | AssertionFailed e -> fprintf f "Assertion failed:@ %a" pp_expr e
     | CannotParse -> pp_print_string f "Cannot parse."
-    | UnknownSymbol -> pp_print_string f "Unknown symbol.");
+    | UnknownSymbol -> pp_print_string f "Unknown symbol."
+    | NoCallCandidate (name, types) ->
+        fprintf f "Cannot find the function you want to call:@ %s(%a)" name
+          (pp_comma_list pp_ty) types
+    | TooManyCallCandidates (name, types) ->
+        fprintf f
+          "Too many functions can be called from this call site:@ %s(%a)" name
+          (pp_comma_list pp_ty) types
+    | BadTypesForBinop (op, t1, t2) ->
+        fprintf f "Cannot apply operator %s on types@ %a@ and %a@."
+          (binop_to_string op) pp_ty t1 pp_ty t2);
     pp_close_box f ();
     pp_close_box f ()
 
 let error_to_string = Format.asprintf "%a" pp_error
+let eprintln = Format.eprintf "@[<2>%a@]@." pp_error
