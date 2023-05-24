@@ -63,11 +63,12 @@ let parse_args () =
         "OPN_FILE Parse the following opn file as main." );
       ( "--no-type-check",
         Arg.Unit (set_strictness `Silence),
-        " Do not type-check, only perform minimal type-inference." );
+        " Do not type-check, only perform minimal type-inference. Default for \
+         v0." );
       ( "--type-check-warn",
         Arg.Unit (set_strictness `Warn),
         " Do not type-check, only perform minimal type-inference. Log typing \
-         errors on stderr. Default for v0." );
+         errors on stderr." );
       ( "--type-check-strict",
         Arg.Unit (set_strictness `TypeCheck),
         " Perform type-checking, Fatal on any type-checking error. Default for \
@@ -85,7 +86,7 @@ let parse_args () =
   let strictness =
     match !strictness with
     | Some s -> s
-    | None -> ( match !version with `ASLv0 -> `Warn | `ASLv1 -> `TypeCheck)
+    | None -> ( match !version with `ASLv0 -> `Silence | `ASLv1 -> `TypeCheck)
   in
 
   let args =

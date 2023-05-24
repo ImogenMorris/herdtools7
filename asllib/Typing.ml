@@ -603,85 +603,90 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
   let check_type_satisfies loc tenv t1 t2 () =
     match subtypes tenv t1 t2 with
     | Some _eqs -> ()
-    | None -> conflict loc [ t1.desc ] t2
+    | None -> conflict loc [ t2.desc ] t1
 
   let t_bool = T_Bool |> add_dummy_pos
   let t_int = T_Int None |> add_dummy_pos
 
-  let check_binop loc tenv op t1 t2 =
+  let check_binop loc tenv op t1 t2 : ty =
     let () =
       if false then
         Format.eprintf "Checking binop %s between %a and %a@."
           (PP.binop_to_string op) PP.pp_ty t1 PP.pp_ty t2
     in
     let with_loc = ASTUtils.add_pos_from loc in
-    match op with
-    | BAND | BOR | BEQ | IMPL ->
-        let+ () = check_type_satisfies loc tenv t1 t_bool in
-        let+ () = check_type_satisfies loc tenv t2 t_bool in
-        T_Bool |> with_loc
-    | AND | OR | EOR ->
-        let n = get_bitvector_width loc t1 in
-        let+ () = check_type_satisfies loc tenv t2 t1 in
-        T_Bits (n, None) |> with_loc
-    | EQ_OP | NEQ ->
-        (* Wrong! *)
-        let+ () =
-          any
-            [
-              both
-                (check_type_satisfies loc tenv t1 t_int)
-                (check_type_satisfies loc tenv t2 t_int);
-              both
-                (check_type_satisfies loc tenv t1 t_bool)
-                (check_type_satisfies loc tenv t2 t_bool);
+    either
+      (fun () ->
+        match op with
+        | BAND | BOR | BEQ | IMPL ->
+            let+ () = check_type_satisfies loc tenv t1 t_bool in
+            let+ () = check_type_satisfies loc tenv t2 t_bool in
+            T_Bool |> with_loc
+        | AND | OR | EOR ->
+            let n = get_bitvector_width loc t1 in
+            let+ () = check_type_satisfies loc tenv t2 t1 in
+            T_Bits (n, None) |> with_loc
+        | EQ_OP | NEQ ->
+            (* Wrong! *)
+            let+ () =
+              any
+                [
+                  both
+                    (check_type_satisfies loc tenv t1 t_int)
+                    (check_type_satisfies loc tenv t2 t_int);
+                  both
+                    (check_type_satisfies loc tenv t1 t_bool)
+                    (check_type_satisfies loc tenv t2 t_bool);
+                  (fun () ->
+                    let n = get_bitvector_width loc t1 in
+                    check_type_satisfies loc tenv t2
+                      (T_Bits (n, None) |> add_dummy_pos)
+                      ());
+                  (fun () ->
+                    match (t1.desc, t2.desc) with
+                    | T_Enum li1, T_Enum li2
+                      when List.compare_lengths li1 li2 = 0
+                           && List.for_all2 String.equal li1 li2 ->
+                        ()
+                    | _ -> fatal_from loc (Error.BadTypesForBinop (op, t1, t2)));
+                ]
+            in
+            T_Bool |> with_loc
+        | LEQ | GEQ | GT | LT ->
+            let+ () = check_type_satisfies loc tenv t1 t_int in
+            let+ () = check_type_satisfies loc tenv t2 t_int in
+            T_Bool |> with_loc
+        | PLUS | MINUS ->
+            either
+              (fun () ->
+                let+ () =
+                  both
+                    (check_type_satisfies loc tenv t1 t_int)
+                    (check_type_satisfies loc tenv t2 t_int)
+                in
+                t_int)
               (fun () ->
                 let n = get_bitvector_width loc t1 in
-                check_type_satisfies loc tenv t2
-                  (T_Bits (n, None) |> add_dummy_pos)
-                  ());
-              (fun () ->
-                match (t1.desc, t2.desc) with
-                | T_Enum li1, T_Enum li2
-                  when List.compare_lengths li1 li2 = 0
-                       && List.for_all2 String.equal li1 li2 ->
-                    ()
-                | _ -> fatal_from loc (Error.BadTypesForBinop (op, t1, t2)));
-              (fun () -> fatal_from loc (Error.BadTypesForBinop (op, t1, t2)));
-            ]
-        in
-        T_Bool |> with_loc
-    | LEQ | GEQ | GT | LT ->
-        let+ () = check_type_satisfies loc tenv t1 t_int in
-        let+ () = check_type_satisfies loc tenv t2 t_int in
-        T_Bool |> with_loc
-    | PLUS | MINUS ->
-        either
-          (fun () ->
+                let t = T_Bits (n, None) |> add_dummy_pos in
+                let+ () =
+                  either
+                    (check_type_satisfies loc tenv t2 t)
+                    (check_type_satisfies loc tenv t2 t_int)
+                in
+                t)
+              ()
+        | MUL | DIV | MOD | SHL | SHR ->
+            let+ () = check_type_satisfies loc tenv t1 t_int in
+            let+ () = check_type_satisfies loc tenv t2 t_int in
+            (* TODO: Work on constraints. *)
+            T_Int None |> with_loc
+        | RDIV ->
             let+ () =
-              both
-                (check_type_satisfies loc tenv t1 t_int)
-                (check_type_satisfies loc tenv t2 t_int)
+              check_type_satisfies loc tenv t1 (T_Real |> add_dummy_pos)
             in
-            t_int)
-          (fun () ->
-            let n = get_bitvector_width loc t1 in
-            let t = T_Bits (n, None) |> add_dummy_pos in
-            let+ () =
-              either
-                (check_type_satisfies loc tenv t2 t)
-                (check_type_satisfies loc tenv t2 t_int)
-            in
-            t)
-          ()
-    | MUL | DIV | MOD | SHL | SHR ->
-        let+ () = check_type_satisfies loc tenv t1 t_int in
-        let+ () = check_type_satisfies loc tenv t2 t_int in
-        (* TODO: Work on constraints. *)
-        T_Int None |> with_loc
-    | RDIV ->
-        let+ () = check_type_satisfies loc tenv t1 (T_Real |> add_dummy_pos) in
-        T_Real |> with_loc
+            T_Real |> with_loc)
+      (fun () -> fatal_from loc (Error.BadTypesForBinop (op, t1, t2)))
+      ()
 
   let check_unop loc tenv op t =
     match op with
