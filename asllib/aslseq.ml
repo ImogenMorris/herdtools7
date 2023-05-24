@@ -73,7 +73,7 @@ let parse_args () =
         " Perform type-checking, Fatal on any type-checking error. Default for \
          v1." );
     ]
-    |> Arg.align
+    |> Arg.align ?limit:None
   in
 
   let anon_fun s = target_files := s :: !target_files in
