@@ -1348,7 +1348,16 @@ module Make
                     (fmt_code n) (fmt_code_size n))
                 test.T.code
             end ;
-          O.o "}"
+          O.o "}" ;
+          O.o "" ;
+          O.o "static void vars_free(vars_t *_vars) {" ;
+          let open OutUtils in
+          List.iter
+            (fun (n,_) ->
+              O.fi "free_pages(_vars->%s);" (fmt_code n))
+            test.T.code ;
+          O.o "}" ;        
+          ()
         end ;
         O.o "" ;
         ObjUtil.insert_lib_file O.o "_instance.c" ;
