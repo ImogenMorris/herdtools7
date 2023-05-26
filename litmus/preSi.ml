@@ -268,11 +268,15 @@ module Make
         if dump_find_ins then begin
           ObjUtil.insert_lib_file O.o "_find_ins.c" ;
           O.o ""
-          end ;
+        end ;
         if do_self then begin
-            Insert.insert O.o "self.c" ;
-            O.o ""
-          end ;
+          Insert.insert O.o "self.c" ;
+          O.o "" ;
+          if Cfg.is_kvm then begin
+            Insert.insert O.o "kvm-self.c" ;
+            O.o "" ;
+          end
+        end ;
         if CfgLoc.need_prelude then begin
           O.o "static size_t prelude_size(ins_t *p) { return find_ins(nop,p,0)+1; }" ;
           O.o "" ;
