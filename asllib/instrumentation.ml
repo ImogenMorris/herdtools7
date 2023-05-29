@@ -104,11 +104,28 @@ module Rule = struct
   let index =
     let tbl : (t, int) Hashtbl.t = Hashtbl.create all_nb in
     let () = List.iteri (fun i r -> Hashtbl.add tbl r i) all in
-    let tbl = Hashtbl.rebuild tbl in
     Hashtbl.find tbl
+
+  let of_string =
+    let tbl : (string, t) Hashtbl.t = Hashtbl.create all_nb in
+    let () =
+      List.iter
+        (fun r -> Hashtbl.add tbl (to_string r |> String.lowercase_ascii) r)
+        all
+    in
+    fun s -> Hashtbl.find tbl (String.lowercase_ascii s)
 end
 
 type rule = Rule.t
+
+module Cmp : Set.OrderedType with type t = rule = struct
+  type t = rule
+
+  let compare = compare
+end
+
+module Set = Set.Make (Cmp)
+module Map = Map.Make (Cmp)
 
 module type INSTR = sig
   val use : rule -> unit

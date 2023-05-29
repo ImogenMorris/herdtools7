@@ -271,19 +271,18 @@ module Make (B : Backend.S) (C : Config) = struct
       | Some (NotYetEvaluated e) ->
           state := IMap.add name Evaluating !state;
           let v =
-            try
-              eval_expr e
-            with Error.ASLException e ->
-                  if _dbg || _warn then
-                Format.eprintf "@[<2>Ignoring static evaluation error:@ %a@]@."
-                  Error.pp_error e;
-              V_Int 0
-               | e ->
-                  if _dbg then
-                    Printf.eprintf
-                      "Evaluating constant %s failed with %s!"
-                      name (Printexc.to_string e) ;
-                  raise e
+            try eval_expr e with
+            | Error.ASLException e ->
+                if _dbg || _warn then
+                  Format.eprintf
+                    "@[<2>Ignoring static evaluation error:@ %a@]@."
+                    Error.pp_error e;
+                V_Int 0
+            | e ->
+                if _dbg then
+                  Printf.eprintf "Evaluating constant %s failed with %s!" name
+                    (Printexc.to_string e);
+                raise e
           in
           state := IMap.add name (AlreadyEvaluated v) !state;
           v
