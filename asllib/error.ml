@@ -19,6 +19,7 @@ type error_desc =
   | NoCallCandidate of string * ty list
   | TooManyCallCandidates of string * ty list
   | BadTypesForBinop of binop * ty * ty
+  | CircularDeclarations of string
 
 type error = error_desc annotated
 
@@ -123,7 +124,12 @@ let pp_error =
         fprintf f
           "ASL Typing error: Illegal application of operator %s on types@ %a@ \
            and %a@."
-          (binop_to_string op) pp_ty t1 pp_ty t2);
+          (binop_to_string op) pp_ty t1 pp_ty t2
+    | CircularDeclarations x ->
+        fprintf f
+          "ASL Evaluation error: circular definition of constants, including \
+           %S."
+          x);
     pp_close_box f ();
     pp_close_box f ()
 
