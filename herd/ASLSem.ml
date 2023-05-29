@@ -562,6 +562,8 @@ module Make (C : Config) = struct
       let module Config = struct
         let type_checking_strictness : Asllib.Typing.strictness =
           if false then `Warn else `Silence
+
+        module Instr = Asllib.Instrumentation.NoInstr
       end in
       let module ASLInterpreter = Asllib.Interpreter.Make (ASLBackend) (Config)
       in

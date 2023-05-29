@@ -26,11 +26,13 @@ type args = {
   print_ast : bool;
   print_serialized : bool;
   print_typed : bool;
+  show_rules : bool;
   version : [ `ASLv0 | `ASLv1 ];
   strictness : Typing.strictness;
 }
 
 let parse_args () =
+  let show_rules = ref false in
   let target_files = ref [] in
   let exec = ref true in
   let print_ast = ref false in
@@ -73,6 +75,9 @@ let parse_args () =
         Arg.Unit (set_strictness `TypeCheck),
         " Perform type-checking, Fatal on any type-checking error. Default for \
          v1." );
+      ( "--show-rules",
+        Arg.Set show_rules,
+        " Instrument the interpreter and log to std rules used." );
     ]
     |> Arg.align ?limit:None
   in
@@ -99,6 +104,7 @@ let parse_args () =
       print_typed = !print_typed;
       version = !version;
       strictness;
+      show_rules = !show_rules;
     }
   in
 
@@ -159,8 +165,16 @@ let () =
 
   let () =
     if args.exec then
-      let _ = or_exit (fun () -> Native.interprete args.strictness ast) in
-      ()
+      or_exit (fun () ->
+          if args.show_rules then
+            let rules =
+              Native.interprete_with_instrumentation args.strictness ast
+            in
+            Format.printf "@[<v 3>Used rules:@ %a@]@."
+              Format.(
+                pp_print_list ~pp_sep:pp_print_cut Instrumentation.Rule.pp)
+              rules
+          else Native.interprete args.strictness ast)
   in
 
   ()

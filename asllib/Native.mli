@@ -23,3 +23,6 @@ module NativeInterpreter (C : Interpreter.Config) :
   Interpreter.S with module B = NativeBackend
 
 val interprete : Typing.strictness -> AST.t -> unit
+
+val interprete_with_instrumentation :
+  Typing.strictness -> AST.t -> Instrumentation.rule list

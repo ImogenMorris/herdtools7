@@ -235,9 +235,25 @@ end
 module NativeInterpreter (C : Interpreter.Config) =
   Interpreter.Make (NativeBackend) (C)
 
+let run (module C : Interpreter.Config) ast =
+  let module I = NativeInterpreter (C) in
+  I.run (List.rev_append NativeStdlib.stdlib ast) NativeStdlib.primitives
+
 let interprete strictness ast =
+  let module C : Interpreter.Config = struct
+    let type_checking_strictness = strictness
+
+    module Instr = Instrumentation.NoInstr
+  end in
+  run (module C) ast
+
+let interprete_with_instrumentation strictness ast =
+  let module B = Instrumentation.SingleSetBuffer in
+  B.reset ();
   let module C = struct
     let type_checking_strictness = strictness
+
+    module Instr = Instrumentation.Make (B)
   end in
-  let module Native = NativeInterpreter (C) in
-  Native.run (List.rev_append NativeStdlib.stdlib ast) NativeStdlib.primitives
+  run (module C) ast;
+  B.get ()
