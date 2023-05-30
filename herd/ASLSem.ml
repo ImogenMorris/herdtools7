@@ -98,6 +98,7 @@ module Make (C : Config) = struct
     module Mixed = M.Mixed (SZ)
 
     let ( let* ) = M.( >>= )
+    let ( let*| ) = M.aslseq
     let ( and* ) = M.( >>| )
     let return = M.unitT
     let ( >>= ) = M.( >>= )
@@ -439,6 +440,13 @@ module Make (C : Config) = struct
     let sint bv_m = bv_m >>= to_int_signed
     let processor_id (ii, _poi) () = return (V.intToV ii.A.proc)
 
+    let can_predict_from v_m w_m =
+      let diff_case = v_m in
+      let eq_case = M.altT v_m w_m in
+      let*| v = v_m and* w = w_m in
+      let*| c = M.op Op.Eq v w in
+      M.choiceT c eq_case diff_case
+
     (**************************************************************************)
     (* ASL environment                                                        *)
     (**************************************************************************)
@@ -490,6 +498,7 @@ module Make (C : Config) = struct
       let lit x = E_Literal (V_Int x) |> with_pos in
       let bv x = T_Bits (BitWidth_Determined x, None) |> with_pos in
       let bv_var x = bv @@ var x in
+      let bv_N = bv_var "N" in
       let bv_lit x = bv @@ lit x in
       let mul x y = E_Binop (MUL, x, y) |> with_pos in
       let t_named x = T_Named x |> with_pos in
@@ -513,17 +522,18 @@ module Make (C : Config) = struct
           return_zero (write_pstate_nzcv ii_env);
         arity_zero (getter "SP_EL0") (return_one (bv_lit 64)) (read_sp ii_env);
         arity_one (setter "SP_EL0") [ bv_lit 64 ] return_zero (write_sp ii_env);
-        arity_two "Replicate"
-          [ bv_var "N"; d ]
+        arity_two "Replicate" [ bv_N; d ]
           (return_one (bv (mul (var "N") (var "arg_1"))))
           replicate;
-        arity_one "UInt" [ bv_var "N" ] (return_one d) uint;
-        arity_one "SInt" [ bv_var "N" ] (return_one d) sint;
+        arity_one "UInt" [ bv_N ] (return_one d) uint;
+        arity_one "SInt" [ bv_N ] (return_one d) sint;
         arity_two "SignExtend"
           [ bv_var "M"; d ]
           (return_one (bv_var "arg_1"))
           sign_extend;
         arity_zero "ProcessorID" (return_one d) (processor_id ii_env);
+        arity_two "CanPredictFrom" [ bv_N; bv_N ] (return_one bv_N)
+          can_predict_from;
       ]
 
     (**************************************************************************)
