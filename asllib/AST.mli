@@ -143,8 +143,6 @@ and type_desc =
   | T_Array of expr * ty
   | T_Record of typed_identifier list
   | T_Exception of typed_identifier list
-  | T_ZType of ty
-      (** A Z-type correcponds to a type with a possible null value.*)
   | T_Named of identifier  (** A type variable. *)
 
 and ty = type_desc annotated

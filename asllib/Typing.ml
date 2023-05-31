@@ -70,36 +70,8 @@ let lookup_return_type (tenv : tenv) pos x =
   | Some (_, None) -> fatal_from pos @@ Error.MismatchedReturnValue x
   | None -> undefined_identifier pos x
 
-(* -------------------------------------------------------------------------
-
-                                Structures
-
-   ------------------------------------------------------------------------- *)
-
-let get_structure (genv : genv) : ty -> ty =
-  (* TODO: rethink to have physical equality when structural equality? *)
-  let rec get ty =
-    let () =
-      if false then Format.eprintf "@[Getting structure of %a.@]@." PP.pp_ty ty
-    in
-    let with_pos = add_pos_from ty in
-    match ty.desc with
-    | T_Named x -> (
-        match IMap.find_opt x genv with
-        | None -> undefined_identifier ty x
-        | Some ty -> get ty)
-    | T_Int _ | T_Real | T_String | T_Bool | T_Bits _ | T_Enum _ -> ty
-    | T_Tuple subtypes -> T_Tuple (List.map get subtypes) |> with_pos
-    | T_Array (e, t) -> T_Array (e, get t) |> with_pos
-    | T_Record fields -> T_Record (get_fields fields) |> with_pos
-    | T_Exception fields -> T_Exception (get_fields fields) |> with_pos
-    | T_ZType ty -> T_ZType (get ty) |> with_pos
-  and get_fields fields =
-    let one_field (name, t) = (name, get t) in
-    let fields = List.map one_field fields in
-    ASTUtils.canonical_fields fields
-  in
-  get
+let get_structure genv ty =
+  Types.get_structure (genv, IMap.empty) ty
 
 (* --------------------------------------------------------------------------
 

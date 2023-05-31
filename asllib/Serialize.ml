@@ -162,7 +162,6 @@ and pp_ty =
     | T_Exception li ->
         addb f "T_Exception ";
         pp_id_assoc pp_ty f li
-    | T_ZType type_desc -> bprintf f "T_ZType (%a)" pp_ty type_desc
     | T_Named identifier -> bprintf f "T_Named %S" identifier
   in
   fun f s -> pp_annotated pp_desc f s

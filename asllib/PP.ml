@@ -165,7 +165,6 @@ and pp_ty f t =
       fprintf f "@[<hv 2>record {@,%a@;<0 -2>}@]" pp_record_ty record_ty
   | T_Exception record_ty ->
       fprintf f "@[exception {%a}@]" pp_record_ty record_ty
-  | T_ZType ty -> fprintf f "ZType(%a)" pp_ty ty
   | T_Named x -> pp_print_string f x
 
 and pp_record_ty f =

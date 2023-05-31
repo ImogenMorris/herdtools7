@@ -68,7 +68,7 @@ let t_bit = T_Bits (BitWidth_Determined (E_Literal (V_Int 1) |> add_dummy_pos), 
 %token MUL NEQ NOT OF OR OTHERWISE PASS PLUS PLUS_COLON POW PRAGMA RBRACE
 %token RBRACKET RDIV REAL RECORD REPEAT RETURN RPAR SEMI_COLON SETTER SHL SHR
 %token SLICING STRING SUBTYPES THEN THROW TO TRY TYPE UNKNOWN UNTIL VAR WHEN
-%token WHERE WHILE WITH ZTYPE
+%token WHERE WHILE WITH
 
 %token <string> IDENTIFIER STRING_LIT MASK_LIT
 %token <Bitvector.t> BITVECTOR_LIT
@@ -358,7 +358,6 @@ let ty :=
     | ARRAY; e=bracketed(expr); OF; t=ty;           < T_Array     >
     | RECORD; l=fields_opt;                         < T_Record    >
     | EXCEPTION; l=fields_opt;                      < T_Exception >
-    | ZTYPE; t=pared(ty);                           < T_ZType     >
     | name=IDENTIFIER;                              < T_Named     >
   )
 
