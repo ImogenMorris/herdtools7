@@ -77,11 +77,11 @@ end
 
 (** {2 Orders on types} *)
 
-(** Subtype-satisfation as per Definition TRVR. *)
 val subtype_satisfies : env -> ty -> ty -> bool
+(** Subtype-satisfation as per Definition TRVR. *)
 
-(** Type-satisfation as per Rule FMXK. *)
 val type_satisfies : env -> ty -> ty -> bool
+(** Type-satisfation as per Rule FMXK. *)
 
 val type_clashes : env -> ty -> ty -> bool
 (** Type-clashing relation.
@@ -93,8 +93,8 @@ val type_clashes : env -> ty -> ty -> bool
     As par Definition VPZZ.
 *)
 
+val subprogram_clashes : env -> 'a func_skeleton -> 'b func_skeleton -> bool
 (** Subprogram clashing relation.
 
     As per Definition BTBR.
 *)
-val subprogram_clashes : env -> 'a func_skeleton -> 'b func_skeleton -> bool

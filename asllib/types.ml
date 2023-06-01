@@ -9,8 +9,7 @@ let add_pos_from = ASTUtils.add_pos_from
 let undefined_identifier pos x =
   Error.fatal_from pos (Error.UndefinedIdentifier x)
 
-let list_equal li1 li2 =
-  List.compare_lengths li1 li2 = 0 && List.for_all2 String.equal li1 li2
+let list_equal = ASTUtils.list_equal
 
 let get_structure (env : env) : ty -> ty =
   (* TODO: rethink to have physical equality when structural equality? *)
@@ -89,6 +88,22 @@ let rec is_non_primitive ty =
 
 let is_primitive ty = not (is_non_primitive ty)
 
+let eval _env e =
+  let v =
+    StaticInterpreter.static_eval
+      (fun _s ->
+        failwith
+          "Not yet implemented: environment lookup in static evaluation for \
+           typechecking.")
+      e
+  in
+  match v with
+  | V_Int i -> i
+  | _ ->
+      failwith
+        "Type error? Cannot use an expression that is not an int in a \
+         constraint."
+
 module Domain = struct
   module IntSet = Set.Make (Int)
 
@@ -109,22 +124,6 @@ module Domain = struct
   let rec add_interval_to_intset acc bot top =
     if bot > top then acc
     else add_interval_to_intset (IntSet.add bot acc) (bot + 1) top
-
-  let eval _env e =
-    let v =
-      StaticInterpreter.static_eval
-        (fun _s ->
-          failwith
-            "Not yet implemented: environment lookup in static evaluation for \
-             typechecking.")
-        e
-    in
-    match v with
-    | V_Int i -> i
-    | _ ->
-        failwith
-          "Type error? Cannot use an expression that is not an int in a \
-           constraint."
 
   let add_constraint_to_intset env acc = function
     | Constraint_Exact e -> IntSet.add (eval env e) acc
@@ -231,16 +230,47 @@ let rec structural_subtype_satisfies env t s =
   (* If S has the structure of an enumeration type then T must have the
      structure of an enumeration type with exactly the same enumeration
      literals. *)
-  | T_Enum li_s, T_Enum li_t -> list_equal li_s li_t
+  | T_Enum li_s, T_Enum li_t -> list_equal String.equal li_s li_t
   | T_Enum _, _ -> false
-  (* If S has the structure of a bitvector ... *)
-  | T_Bits _, _ -> assert false
+  (*
+    • If S has the structure of a bitvector type with determined width then
+      either T must have the structure of a bitvector type of the same
+      determined width or T must have the structure of a bitvector type with
+      undetermined width.
+    • If S has the structure of a bitvector type with undetermined width then T
+      must have the structure of a bitvector type.
+    • If S has the structure of a bitvector type which has bitfields then T
+      must have the structure of a bitvector type of the same width and for
+      every bitfield in S there must be a bitfield in T of the same name, width
+      and offset, whose type type-satisfies the bitfield in S.
+  *)
+  | T_Bits (w_s, bf_s), T_Bits (w_t, bf_t) -> (
+      (match (w_s, w_t) with
+      | BitWidth_Determined e_s, BitWidth_Determined e_t ->
+          eval env e_s = eval env e_t
+      | BitWidth_Determined _, _ -> false
+      | BitWidth_Constrained _, _ -> true
+      | _ -> true)
+      &&
+      match (bf_s, bf_t) with
+      | Some bfs_s, Some bfs_t ->
+          w_s = w_t
+          &&
+          let bf_equal (name_s, slices_s) (name_t, slices_t) =
+            String.equal name_s name_t
+            && ASTUtils.slices_equal slices_s slices_t
+          in
+          let mem_bf bfs_t bf_s = List.exists (bf_equal bf_s) bfs_t in
+          List.for_all (mem_bf bfs_t) bfs_s
+      | Some _, None -> false
+      | None, _ -> true)
+  | T_Bits _, _ -> false
   (* If S has the structure of an array type with elements of type E then T
      must have the structure of an array type with elements of type E, and T
      must have the same element indices as S.
      TODO: this is probably wrong, or a bad approximation. *)
   | T_Array (length_s, ty_s), T_Array (length_t, ty_t) ->
-      ty_s = ty_t && length_s = length_t
+      ASTUtils.(expr_equal length_s length_t && type_equal ty_s ty_t)
   | T_Array _, _ -> false
   (* If S has the structure of a tuple type then T must have the structure of
      a tuple type with same number of elements as S, and each element in T
@@ -263,9 +293,6 @@ let rec structural_subtype_satisfies env t s =
   | T_Exception _, _ | T_Record _, _ -> false (* A structure cannot be a name *)
   | T_Named _, _ -> assert false
 
-and subtype_satisfies env t s =
-  structural_subtype_satisfies env t s && domain_subtype_satisfies env t s
-
 and domain_subtype_satisfies env t s =
   let s_struct = get_structure env s in
   match s_struct.desc with
@@ -283,6 +310,9 @@ and domain_subtype_satisfies env t s =
          of S. *)
       (* TODO *)
       assert false
+
+and subtype_satisfies env t s =
+  structural_subtype_satisfies env t s && domain_subtype_satisfies env t s
 
 and type_satisfies env t s =
   (* Type T type-satisfies type S if and only if at least one of the following conditions holds: *)
@@ -316,7 +346,7 @@ let rec type_clashes env t s =
   | T_Int _, T_Int _ | T_Real, T_Real | T_String, T_String | T_Bits _, T_Bits _
     ->
       true
-  | T_Enum li_s, T_Enum li_t -> list_equal li_s li_t
+  | T_Enum li_s, T_Enum li_t -> list_equal String.equal li_s li_t
   | T_Array (_, ty_s), T_Array (_, ty_t) -> type_clashes env ty_s ty_t
   | T_Tuple li_s, T_Tuple li_t ->
       List.compare_lengths li_s li_t = 0
@@ -337,4 +367,3 @@ let subprogram_clashes env f1 f2 =
   && List.for_all2
        (fun (_, t1) (_, t2) -> type_clashes env t1 t2)
        f1.args f2.args
-

@@ -70,8 +70,7 @@ let lookup_return_type (tenv : tenv) pos x =
   | Some (_, None) -> fatal_from pos @@ Error.MismatchedReturnValue x
   | None -> undefined_identifier pos x
 
-let get_structure genv ty =
-  Types.get_structure (genv, IMap.empty) ty
+let get_structure genv ty = Types.get_structure (genv, IMap.empty) ty
 
 (* --------------------------------------------------------------------------
 

@@ -1,11 +1,9 @@
 open Asllib
 open AST
 open Test_helpers.Helpers
+open Test_helpers.Helpers.Infix
 
 let build_consts () =
-  let ( !! ) e = ASTUtils.add_dummy_pos e in
-  let ( !$ ) i = !!(E_Literal (V_Int i)) in
-  let ( !% ) x = !!(E_Var x) in
   let values =
     [ ("c1", !$3); ("c2", !!(E_Slice (!%"c1", [ Slice_Range (!$3, !$0) ]))) ]
   in

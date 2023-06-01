@@ -14,8 +14,8 @@
       (run %{test} asl/required))))
 
 (tests
-  (names static bitvector)
-  (modules static bitvector)
+  (names static bitvector types)
+  (modules static bitvector types)
   (modes native)
   (deps (:standard ../libdir/stdlib.asl))
   (libraries asllib test_helpers))

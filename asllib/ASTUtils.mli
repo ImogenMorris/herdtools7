@@ -37,6 +37,12 @@ val canonical_fields : (String.t * 'a) list -> (String.t * 'a) list
 val literal : value -> expr
 val var_ : identifier -> expr
 val binop : binop -> expr -> expr -> expr
+val list_equal : ('a -> 'a -> bool) -> 'a list -> 'a list -> bool
+val expr_equal : expr -> expr -> bool
+val value_equal : value -> value -> bool
+val slice_equal : slice -> slice -> bool
+val slices_equal : slice list -> slice list -> bool
+val type_equal : ty -> ty -> bool
 val expr_of_lexpr : lexpr -> expr
 val fresh_var : string -> string
 val big_union : expr list -> expr

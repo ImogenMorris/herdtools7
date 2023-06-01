@@ -27,6 +27,11 @@ let add_pos_from pos desc = { pos with desc }
 let with_pos_from pos { desc; _ } = add_pos_from pos desc
 let map_desc f thing = f thing |> add_pos_from thing
 
+let list_equal equal li1 li2 =
+  li1 == li2 || (List.compare_lengths li1 li2 = 0 && List.for_all2 equal li1 li2)
+
+let pair_equal f g (x1, y1) (x2, y2) = f x1 x2 && g y1 y2
+
 let map2_desc f thing1 thing2 =
   {
     desc = f thing1 thing2;
@@ -121,6 +126,117 @@ let used_identifiers, used_identifiers_stmt =
 let canonical_fields li =
   let compare (x, _) (y, _) = String.compare x y in
   List.sort compare li
+
+let rec value_equal v1 v2 =
+  match (v1, v2) with
+  | V_Bool b1, V_Bool b2 -> b1 = b2
+  | V_Int i1, V_Int i2 -> i1 = i2
+  | V_Real f1, V_Real f2 -> f1 = f2
+  | V_BitVector bv1, V_BitVector bv2 -> Bitvector.equal bv1 bv2
+  | V_Exception fs1, V_Exception fs2 | V_Record fs1, V_Record fs2 ->
+      List.compare_lengths fs1 fs2 = 0
+      &&
+      let fs1 = canonical_fields fs1 and fs2 = canonical_fields fs2 in
+      let field_equal (x1, v1) (x2, v2) =
+        String.equal x1 x2 && value_equal v1 v2
+      in
+      List.for_all2 field_equal fs1 fs2
+  | V_Tuple vs1, V_Tuple vs2 ->
+      List.compare_lengths vs1 vs2 = 0 && List.for_all2 value_equal vs1 vs2
+  | _ -> false
+
+let rec expr_equal e1 e2 =
+  e1 == e2
+  ||
+  match (e1.desc, e2.desc) with
+  | E_Binop (o1, e11, e21), E_Binop (o2, e12, e22) ->
+      o1 = o2 && expr_equal e11 e12 && expr_equal e21 e22
+  | E_Binop _, _ | _, E_Binop _ -> false
+  | E_Call (x1, args1, _), E_Call (x2, args2, _) ->
+      String.equal x1 x2 && list_equal expr_equal args1 args2
+  | E_Call _, _ | _, E_Call _ -> false
+  | E_Concat li1, E_Concat li2 -> list_equal expr_equal li1 li2
+  | E_Concat _, _ | _, E_Concat _ -> false
+  | E_Cond (e11, e21, e31), E_Cond (e12, e22, e32) ->
+      expr_equal e11 e12 && expr_equal e21 e22 && expr_equal e31 e32
+  | E_Cond _, _ | _, E_Cond _ -> false
+  | E_Slice (e1, slices1), E_Slice (e2, slices2) ->
+      expr_equal e1 e2 && slices_equal slices1 slices2
+  | E_Slice _, _ | _, E_Slice _ -> false
+  | E_GetField _, _ | E_GetFields _, _ | E_Pattern _, _ | E_Record _, _ ->
+      assert false
+  | E_Literal v1, E_Literal v2 -> value_equal v1 v2
+  | E_Literal _, _ | _, E_Literal _ -> false
+  | E_Tuple li1, E_Tuple li2 -> list_equal expr_equal li1 li2
+  | E_Tuple _, _ | _, E_Tuple _ -> false
+  | E_Typed (e1, t1), E_Typed (e2, t2) -> expr_equal e1 e2 && type_equal t1 t2
+  | E_Typed _, _ | _, E_Typed _ -> false
+  | E_Unop (o1, e1), E_Unop (o2, e2) -> o1 = o2 && expr_equal e1 e2
+  | E_Unop _, _ | _, E_Unop _ -> false
+  | E_Unknown _, _ | _, E_Unknown _ -> false
+  | E_Var s1, E_Var s2 -> String.equal s1 s2
+  | E_Var _, _ (* | _, E_Var _ *) -> false
+
+and slices_equal slices1 slices2 = list_equal slice_equal slices1 slices2
+
+and slice_equal slice1 slice2 =
+  slice1 == slice2
+  ||
+  match (slice1, slice2) with
+  | Slice_Single e1, Slice_Single e2 -> expr_equal e1 e2
+  | Slice_Range (e11, e21), Slice_Range (e12, e22)
+  | Slice_Length (e11, e21), Slice_Length (e12, e22) ->
+      expr_equal e11 e12 && expr_equal e21 e22
+  | _ -> false
+
+and constraint_equal c1 c2 =
+  c1 == c2
+  ||
+  match (c1, c2) with
+  | Constraint_Exact e1, Constraint_Exact e2 -> expr_equal e1 e2
+  | Constraint_Range (e11, e21), Constraint_Range (e12, e22) ->
+      expr_equal e11 e12 && expr_equal e21 e22
+  | _ -> false
+
+and constraints_equal cs1 cs2 =
+  cs1 == cs2 || list_equal constraint_equal cs1 cs2
+
+and type_equal t1 t2 =
+  t1.desc == t2.desc
+  ||
+  match (t1.desc, t2.desc) with
+  | T_Bool, T_Bool
+  | T_Real, T_Real
+  | T_String, T_String
+  | T_Int None, T_Int None ->
+      true
+  | T_Int (Some c1), T_Int (Some c2) -> constraints_equal c1 c2
+  | T_Bits (w1, bf1), T_Bits (w2, bf2) ->
+      bitwidth_equal w1 w2 && bitfields_equal bf1 bf2
+  | T_Array (l1, t1), T_Array (l2, t2) -> expr_equal l1 l2 && type_equal t1 t2
+  | T_Named s1, T_Named s2 -> String.equal s1 s2
+  | T_Enum li1, T_Enum li2 ->
+      (* TODO: order of fields? *) list_equal String.equal li1 li2
+  | T_Exception f1, T_Exception f2 | T_Record f1, T_Record f2 ->
+      list_equal
+        (pair_equal String.equal type_equal)
+        (canonical_fields f1) (canonical_fields f2)
+  | T_Tuple ts1, T_Tuple ts2 -> list_equal type_equal ts1 ts2
+  | _ -> false
+
+and bitwidth_equal w1 w2 =
+  w1 == w2
+  ||
+  match (w1, w2) with
+  | BitWidth_Constrained c1, BitWidth_Constrained c2 -> constraints_equal c1 c2
+  | BitWidth_ConstrainedFormType t1, BitWidth_ConstrainedFormType t2 ->
+      type_equal t1 t2
+  | BitWidth_Determined e1, BitWidth_Determined e2 -> expr_equal e1 e2
+  | _ -> false
+
+and bitfields_equal bf1 bf2 =
+  bf1 == bf2
+  || Option.equal (list_equal (pair_equal String.equal slices_equal)) bf1 bf2
 
 let literal v = E_Literal v |> add_dummy_pos
 let var_ x = E_Var x |> add_dummy_pos
