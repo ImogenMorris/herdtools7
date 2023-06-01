@@ -1,8 +1,11 @@
 open Asllib
+open ASTUtils
 open Types
 open AST
 open Test_helpers.Helpers
 open Test_helpers.Helpers.Infix
+
+let empty_env : env = (IMap.empty, IMap.empty)
 
 let builtin_examples () =
   let assert_is_builtin_singular t =
@@ -93,9 +96,26 @@ let subtype_examples () =
            None ))
   in
 
-  let env = (ASTUtils.IMap.empty, ASTUtils.IMap.empty) in
+  assert (not (subtype_satisfies empty_env bits_2_4 bits_4));
 
-  assert (not (subtype_satisfies env bits_2_4 bits_4));
+  ()
+
+let lca_examples () =
+  let bits_4 = !!(T_Bits (BitWidth_Determined !$4, None)) in
+  let bits_2 = !!(T_Bits (BitWidth_Determined !$2, None)) in
+
+  assert (Types.lowest_common_ancestor empty_env bits_4 bits_2 = None);
+
+  let integer_4 = !!(T_Int (Some [ Constraint_Exact !$4 ])) in
+  let integer_2 = !!(T_Int (Some [ Constraint_Exact !$2 ])) in
+
+  let lca = Types.lowest_common_ancestor empty_env integer_4 integer_2 in
+  assert (Option.is_some lca);
+  let lca = Option.get lca in
+  let domain = Domain.of_type empty_env lca in
+
+  assert (Domain.mem (V_Int 2) domain);
+  assert (Domain.mem (V_Int 4) domain);
 
   ()
 
@@ -105,4 +125,5 @@ let () =
       ("types.builtin_examples", builtin_examples);
       ("types.structure_example", structure_example);
       ("types.subtype_example", subtype_examples);
+      ("types.lca_example", lca_examples);
     ]

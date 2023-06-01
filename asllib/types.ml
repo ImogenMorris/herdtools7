@@ -1,15 +1,10 @@
 open AST
-module IMap = ASTUtils.IMap
-module ISet = ASTUtils.ISet
+open ASTUtils
 
 type env = ty IMap.t * identifier IMap.t
 
-let add_pos_from = ASTUtils.add_pos_from
-
 let undefined_identifier pos x =
   Error.fatal_from pos (Error.UndefinedIdentifier x)
-
-let list_equal = ASTUtils.list_equal
 
 let get_structure (env : env) : ty -> ty =
   (* TODO: rethink to have physical equality when structural equality? *)
@@ -32,7 +27,7 @@ let get_structure (env : env) : ty -> ty =
   and get_fields fields =
     let one_field (name, t) = (name, get t) in
     let fields = List.map one_field fields in
-    ASTUtils.canonical_fields fields
+    canonical_fields fields
   in
 
   get
@@ -65,12 +60,14 @@ let is_builtin_aggregate ty =
 let is_builtin ty = is_builtin_singular ty || is_builtin_aggregate ty
 let is_named ty = match ty.desc with T_Named _ -> true | _ -> false
 
-(* A named type is singular if it has the structure of a singular type, otherwise it is aggregate. *)
+(* A named type is singular if it has the structure of a singular type,
+   otherwise it is aggregate. *)
 let is_singular env ty =
   is_builtin_singular ty
   || (is_named ty && get_structure env ty |> is_builtin_singular)
 
-(* A named type is singular if it has the structure of a singular type, otherwise it is aggregate. *)
+(* A named type is singular if it has the structure of a singular type,
+   otherwise it is aggregate. *)
 let is_aggregate env ty =
   is_builtin_aggregate ty
   || (is_named ty && get_structure env ty |> is_builtin_aggregate)
@@ -208,7 +205,8 @@ let subtypes env t1 t2 =
   | _ -> false
 
 let rec structural_subtype_satisfies env t s =
-  (* A type T subtype-satisfies type S if and only if all of the following conditions hold: *)
+  (* A type T subtype-satisfies type S if and only if all of the following
+     conditions hold: *)
   let s_struct = get_structure env s and t_struct = get_structure env t in
   match (s_struct.desc, t_struct.desc) with
   (* If S has the structure of an integer type then T must have the structure
@@ -257,8 +255,7 @@ let rec structural_subtype_satisfies env t s =
           w_s = w_t
           &&
           let bf_equal (name_s, slices_s) (name_t, slices_t) =
-            String.equal name_s name_t
-            && ASTUtils.slices_equal slices_s slices_t
+            String.equal name_s name_t && slices_equal slices_s slices_t
           in
           let mem_bf bfs_t bf_s = List.exists (bf_equal bf_s) bfs_t in
           List.for_all (mem_bf bfs_t) bfs_s
@@ -270,7 +267,7 @@ let rec structural_subtype_satisfies env t s =
      must have the same element indices as S.
      TODO: this is probably wrong, or a bad approximation. *)
   | T_Array (length_s, ty_s), T_Array (length_t, ty_t) ->
-      ASTUtils.(expr_equal length_s length_t && type_equal ty_s ty_t)
+      expr_equal length_s length_t && type_equal ty_s ty_t
   | T_Array _, _ -> false
   (* If S has the structure of a tuple type then T must have the structure of
      a tuple type with same number of elements as S, and each element in T
@@ -315,7 +312,8 @@ and subtype_satisfies env t s =
   structural_subtype_satisfies env t s && domain_subtype_satisfies env t s
 
 and type_satisfies env t s =
-  (* Type T type-satisfies type S if and only if at least one of the following conditions holds: *)
+  (* Type T type-satisfies type S if and only if at least one of the following
+     conditions holds: *)
   (* T is a subtype of S *)
   subtypes env t s
   (* T subtype-satisfies S and at least one of S or T is an anonymous type *)
@@ -334,10 +332,12 @@ let rec type_clashes env t s =
       • they both have the structure of integers
       • they both have the structure of reals
       • they both have the structure of strings
-      • they both have the structure of enumeration types with the same enumeration literals
+      • they both have the structure of enumeration types with the same
+        enumeration literals
       • they both have the structure of bit vectors
       • they both have the structure of arrays whose element types type-clash
-      • they both have the structure of tuples of the same length whose corresponding element types type-clash
+      • they both have the structure of tuples of the same length whose
+        corresponding element types type-clash
       • S is either a subtype or a supertype of T *)
   (subtypes env s t || subtypes env t s)
   ||
@@ -358,7 +358,8 @@ let subprogram_clashes env f1 f2 =
       • they have the same name
       • they are the same kind of subprogram
       • they have the same number of formal arguments
-      • every formal argument in one type-clashes with the corresponding formal argument in the other
+      • every formal argument in one type-clashes with the corresponding formal
+        argument in the other
 
      TODO: they are the same kind of subprogram
   *)
@@ -367,3 +368,137 @@ let subprogram_clashes env f1 f2 =
   && List.for_all2
        (fun (_, t1) (_, t2) -> type_clashes env t1 t2)
        f1.args f2.args
+
+let supertypes_set env =
+  let rec aux acc x =
+    let acc = ISet.add x acc in
+    match IMap.find_opt x (snd env) with Some x' -> aux acc x' | None -> acc
+  in
+  aux ISet.empty
+
+let find_named_lowest_common_supertype env x1 x2 =
+  (* TODO: Have a better algorithm? This is in O(h * log h) because set
+     insertions are in O (log h), where h is the max height of the subtype
+     tree. Wikipedia says it is in O(h) generally, and it can be precomputed,
+     in which case it becomes O(1). *)
+  let set1 = supertypes_set env x1 in
+  let rec aux x =
+    if ISet.mem x set1 then Some x
+    else match IMap.find_opt x (snd env) with None -> None | Some x' -> aux x'
+  in
+  aux x2
+
+let rec lowest_common_ancestor env s t =
+  (* The lowest common ancestor of types S and T is: *)
+  (* • If S and T are the same type: S (or T). *)
+  if type_equal s t then Some s
+  else
+    match (s.desc, t.desc) with
+    | T_Named name_s, T_Named name_t -> (
+        (* If S and T are both named types: the (unique) common supertype of S
+           and T that is a subtype of all other common supertypes of S and T. *)
+        match find_named_lowest_common_supertype env name_s name_t with
+        | None -> None
+        | Some name -> Some (T_Named name |> add_dummy_pos))
+    | _ -> (
+        let struct_s = get_structure env s and struct_t = get_structure env t in
+        match (struct_s.desc, struct_t.desc) with
+        | T_Array (l_s, t_s), T_Array (l_t, t_t)
+          when type_equal t_s t_t && expr_equal l_s l_t -> (
+            (* If S and T both have the structure of array types with the same
+               index type and the same element types:
+                – If S is a named type and T is an anonymous type: S
+                – If S is an anonymous type and T is a named type: T *)
+            match (s.desc, t.desc) with
+            | T_Named _, T_Named _ -> assert false
+            | T_Named _, _ -> Some s
+            | _, T_Named _ -> Some t
+            | _ -> assert false)
+        | T_Tuple li_s, T_Tuple li_t
+          when List.compare_lengths li_s li_t = 0
+               && List.for_all2 (type_satisfies env) li_s li_t
+               && List.for_all2 (type_satisfies env) li_t li_s -> (
+            (* If S and T both have the structure of tuple types with the same
+               number of elements and the types of elements of S type-satisfy the
+               types of the elements of T and vice-versa:
+                – If S is a named type and T is an anonymous type: S
+                – If S is an anonymous type and T is a named type: T
+                – If S and T are both anonymous types: the tuple type with the
+                  type of each element the lowest common ancestor of the types of
+                  the corresponding elements of S and T. *)
+            match (s.desc, t.desc) with
+            | T_Named _, T_Named _ -> assert false
+            | T_Named _, _ -> Some s
+            | _, T_Named _ -> Some t
+            | _ ->
+                let maybe_ancestors =
+                  List.map2 (lowest_common_ancestor env) li_s li_t
+                in
+                let ancestors = List.filter_map Fun.id maybe_ancestors in
+                if List.compare_lengths ancestors li_s = 0 then
+                  Some (add_dummy_pos (T_Tuple ancestors))
+                else None)
+        | T_Int (Some []), _ ->
+            (* TODO: This is pretty bizarre. Maybe revisit LRM? *)
+            (* If either S or T have the structure of an under-constrained
+               integer type: the under-constrained integer type. *)
+            Some s
+        | _, T_Int (Some []) ->
+            (* TODO: This is pretty bizarre. Maybe revisit LRM? *)
+            (* If either S or T have the structure of an under-constrained
+               integer type: the under-constrained integer type. *)
+            Some t
+        | T_Int (Some cs_s), T_Int (Some cs_t) -> (
+            (* Implicit: cs_s and cs_t are non-empty, see patterns above. *)
+            (* If S and T both have the structure of well-constrained integer
+               types:
+               – If S is a named type and T is an anonymous type: S
+               – If T is an anonymous type and S is a named type: T
+               – If S and T are both anonymous types: the well-constrained
+                 integer type with domain the union of the domains of S and T.
+            *)
+            match (s.desc, t.desc) with
+            | T_Named _, T_Named _ -> assert false
+            | T_Named _, _ -> Some s
+            | _, T_Named _ -> Some t
+            | _ ->
+                (* TODO: simplify domains ? If domains use a form of diets,
+                   this could be more efficient. *)
+                Some (add_dummy_pos (T_Int (Some (cs_s @ cs_t)))))
+        | T_Int None, _ -> (
+            (* Here S has the structure of an unconstrained integer type. *)
+            (* TODO: This is pretty bizarre. Maybe revisit LRM? *)
+            (* TODO: typo in the LRM, corrected here, on point 2 S and T have
+               been swapped. *)
+            (* If either S or T have the structure of an unconstrained integer
+               type:
+               – If S is a named type with the structure of an unconstrained
+                 integer type and T is an anonymous type: S
+               – If T is an anonymous type and S is a named type with the
+                 structure of an unconstrained integer type: T
+               – If S and T are both anonymous types: the unconstrained integer
+                 type. *)
+            match (s.desc, t.desc) with
+            | T_Named _, T_Named _ -> assert false
+            | T_Named _, _ -> Some s
+            | _, T_Named _ -> assert false
+            | _, _ -> Some (add_dummy_pos (T_Int None)))
+        | _, T_Int None -> (
+            (* Here T has the structure of an unconstrained integer type. *)
+            (* TODO: This is pretty bizarre. Maybe revisit LRM? *)
+            (* TODO: typo in the LRM, corrected here, on point 2 S and T have
+               been swapped. *)
+            (* If either S or T have the structure of an unconstrained integer
+               type:
+               – If S is a named type with the structure of an unconstrained
+                 integer type and T is an anonymous type: S
+               – If T is an anonymous type and S is a named type with the
+                 structure of an unconstrained integer type: T
+               – If S and T are both anonymous types: the unconstrained integer
+                 type. *)
+            match (s.desc, t.desc) with
+            | T_Named _, T_Named _ -> assert false
+            | T_Named _, _ -> assert false
+            | _, T_Named _ -> Some t
+            | _, _ -> Some (add_dummy_pos (T_Int None)))
+        | _ -> None)

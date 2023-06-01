@@ -89,7 +89,7 @@ val type_clashes : env -> ty -> ty -> bool
     Notes:
       - T subtype-satisfies S implies T and S type-clash
       - This is a equivalence relation
-    
+
     As par Definition VPZZ.
 *)
 
@@ -97,4 +97,10 @@ val subprogram_clashes : env -> 'a func_skeleton -> 'b func_skeleton -> bool
 (** Subprogram clashing relation.
 
     As per Definition BTBR.
+*)
+
+val lowest_common_ancestor : env -> ty -> ty -> ty option
+(** Lowest common ancestor.
+
+    As per Rule YZHM.
 *)

@@ -576,6 +576,12 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | Some _eqs -> ()
     | None -> conflict loc [ t2.desc ] t1
 
+  (** [check_structure_boolean env t1] checks that [t1] has the structure of a boolean. *)
+  let check_structure_boolean loc tenv t1 () =
+    match (get_structure tenv.globals t1).desc with
+    | T_Bool -> ()
+    | _ -> conflict loc [ T_Bool ] t1
+
   let t_bool = T_Bool |> add_dummy_pos
   let t_int = T_Int None |> add_dummy_pos
 
@@ -839,6 +845,21 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         in
         ( lookup_return_type tenv e name |> rename_ty_eqs eqs,
           E_Call (name, args, eqs) |> add_pos_from e )
+    | E_Cond (e_cond, e_true, e_false) ->
+        let t_cond, e_cond = annotate_expr tenv lenv e_cond in
+        let+ () = check_structure_boolean e tenv t_cond in
+        let t_true, e_true = annotate_expr tenv lenv e_true
+        and t_false, e_false = annotate_expr tenv lenv e_false in
+        let t =
+          best_effort t_true (fun _ ->
+              match
+                Types.lowest_common_ancestor (tenv.globals, IMap.empty) t_true
+                  t_false
+              with
+              | None -> failwith "Cannot reconcile two types."
+              | Some t -> t)
+        in
+        (t, E_Cond (e_cond, e_true, e_false) |> add_pos_from e)
     | _ ->
         let e = annotate_expr_fallback tenv lenv e in
         let t = best_effort t_bool (fun _ -> infer tenv lenv e) in
