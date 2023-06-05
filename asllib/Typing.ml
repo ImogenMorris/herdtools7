@@ -954,7 +954,9 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                 Types.lowest_common_ancestor (tenv.globals, IMap.empty) t_true
                   t_false
               with
-              | None -> failwith "Cannot reconcile two types."
+              | None ->
+                  fatal_from e
+                    (Error.NotYetImplemented "Cannot reconcile the two types.")
               | Some t -> t)
         in
         (t, E_Cond (e_cond, e_true, e_false) |> add_pos_from e)
