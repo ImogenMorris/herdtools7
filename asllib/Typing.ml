@@ -12,7 +12,6 @@ let conflict pos expected provided =
 
 let add_dummy_pos = ASTUtils.add_dummy_pos
 let add_pos_from = ASTUtils.add_pos_from_st
-let get_desc { desc; _ } = desc
 
 (* Control Warning outputs. *)
 let _warn = false
@@ -260,6 +259,7 @@ let plus = ASTUtils.binop PLUS
 let t_bits_bitwidth e = T_Bits (BitWidth_Determined e, [])
 
 let reduce_constants =
+  (* TODO static reduction. *)
   let exception TrivialReductionFailed in
   let lookup _s = raise_notrace TrivialReductionFailed in
   fun e ->
@@ -630,6 +630,16 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | T_Bool -> ()
     | _ -> conflict loc [ T_Bool ] t1
 
+  let check_structure_bits loc tenv t () =
+    match (get_structure tenv.globals t).desc with
+    | T_Bits _ -> ()
+    | _ -> conflict loc [ ASTUtils.default_t_bits ] t
+
+  let check_structure_integer loc tenv t () =
+    match (get_structure tenv.globals t).desc with
+    | T_Int _ -> ()
+    | _ -> conflict loc [ T_Int None ] t
+
   let check_bv_have_same_determined_bitwidth' tenv t1 t2 () =
     let n = get_bitvector_width' tenv t1 and m = get_bitvector_width' tenv t2 in
     if ASTUtils.bitwidth_equal n m then ()
@@ -773,22 +783,13 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
 
   let rec annotate_expr_fallback tenv lenv e : expr =
     let tr = try_annotate_expr tenv lenv in
-    let tr_desc d = add_pos_from e d |> tr |> get_desc in
     add_pos_from e
     @@
     match e.desc with
     | E_Literal _ | E_Typed _ | E_Var _ | E_Binop _ | E_Call _ | E_Unop _
-    | E_Cond _ | E_Tuple _ | E_Concat _ | E_Record _ | E_Unknown _ ->
+    | E_Cond _ | E_Tuple _ | E_Concat _ | E_Record _ | E_Unknown _ | E_Slice _
+      ->
         assert false
-    | E_Slice (e', slices) -> (
-        let reduced =
-          match e'.desc with
-          | E_Var x -> getter_should_reduce_to_call tenv x slices
-          | _ -> None
-        in
-        match reduced with
-        | Some (name, args) -> E_Call (name, args, []) |> tr_desc
-        | None -> E_Slice (tr e', annotate_slices tenv lenv slices))
     | E_GetField (e', field, _ta) -> (
         let e' = tr e' in
         let ty = infer tenv lenv e' in
@@ -806,14 +807,43 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     best_effort (t_int, e) (fun (_, e) -> annotate_expr tenv lenv e) |> snd
 
   and annotate_slices tenv lenv =
+    (* Rules:
+       - Rule WZCS: The width of a bitslice must be any non-negative,
+         statically evaluable integer expression (including zero).
+       - Rule KTBG: It is an error if any bits selected by a bitslice are not
+         in range for the expression being sliced. If the offset of a bitslice
+         depends on a statically evaluable expression then this shall be
+         checked at compile time. Otherwise a bounds check will occur at
+         execution-time and an implementation defined exception shall be thrown
+         if it fails.
+       TODO: check them
+       TODO: there should be a rule that an index inside a slice should have
+       the structure of an integer
+    *)
     let tr_one = function
-      | Slice_Single e -> Slice_Single (try_annotate_expr tenv lenv e)
+      | Slice_Single e ->
+          (* First rule trivially true. *)
+          (* TODO: try evaluate this at compile time, and check it against sliced
+             expression type. *)
+          let t_e, e = annotate_expr tenv lenv e in
+          let+ () = check_structure_integer e tenv t_e in
+          Slice_Single e
       | Slice_Range (e1, e2) ->
-          Slice_Range
-            (try_annotate_expr tenv lenv e1, try_annotate_expr tenv lenv e2)
+          let t_e1, e1 = annotate_expr tenv lenv e1
+          and t_e2, e2 = annotate_expr tenv lenv e2 in
+          let+ () = check_structure_integer e1 tenv t_e1 in
+          let+ () = check_structure_integer e2 tenv t_e2 in
+          (* TODO: check that diff is statically evaluable. *)
+          Slice_Range (e1, e2)
       | Slice_Length (e1, e2) ->
-          Slice_Length
-            (try_annotate_expr tenv lenv e1, try_annotate_expr tenv lenv e2)
+          let t_e1, e1 = annotate_expr tenv lenv e1
+          and t_e2, e2 = annotate_expr tenv lenv e2 in
+          let+ () = check_structure_integer e1 tenv t_e1 in
+          let+ () = check_structure_integer e2 tenv t_e2 in
+          (* TODO: check that length is statically evaluable. *)
+          (* TODO: if offset is statically evaluable, check that it is less
+             than sliced expression width. *)
+          Slice_Length (e1, e2)
     in
     List.map tr_one
 
@@ -989,6 +1019,30 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | E_Unknown t ->
         let t = get_structure tenv.globals t in
         (t, E_Unknown t |> add_pos_from e)
+    | E_Slice (e', slices) -> (
+        let reduced =
+          match e'.desc with
+          | E_Var x -> getter_should_reduce_to_call tenv x slices
+          | _ -> None
+        in
+        match reduced with
+        | Some (name, args) ->
+            E_Call (name, args, []) |> add_pos_from e |> annotate_expr tenv lenv
+        | None ->
+            let t_e', e' = annotate_expr tenv lenv e' in
+            let+ () =
+              either
+                (check_structure_bits e tenv t_e')
+                (check_structure_integer e tenv t_e')
+            in
+            let w = slices_length slices in
+            (* TODO: check that:
+               - Rule SNQJ: An expression or subexpression which may result in
+                 a zero-length bitvector must not be side-effecting.
+            *)
+            let slices = best_effort slices (annotate_slices tenv lenv) in
+            ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
+              E_Slice (e', slices) |> add_pos_from e ))
     | _ ->
         let e = annotate_expr_fallback tenv lenv e in
         let t = best_effort t_bool (fun _ -> infer tenv lenv e) in
