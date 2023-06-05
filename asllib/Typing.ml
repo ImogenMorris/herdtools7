@@ -594,7 +594,8 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | f :: li -> either f (any li) x
 
   let assumption_failed () = raise_notrace TypingAssumptionFailed [@@inline]
-  let assert_true b () = if b then () else assumption_failed () [@@inline]
+  let check_true b fail () = if b then () else fail () [@@inline]
+  let check_true' b = check_true b assumption_failed [@@inline]
 
   let eval' _tenv =
     let lookup _s = assumption_failed () in
@@ -612,6 +613,11 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
   let get_bitvector_width loc tenv t =
     try get_bitvector_width' tenv t
     with TypingAssumptionFailed -> conflict loc [ ASTUtils.default_t_bits ] t
+
+  let get_record_fields loc tenv t =
+    match (get_structure tenv.globals t).desc with
+    | T_Record fields -> fields
+    | _ -> conflict loc [ T_Record [] ] t
 
   (** [check_type_satisfies t1 t2] if [t1 <: t2]. *)
   let check_type_satisfies loc tenv t1 t2 () =
@@ -631,7 +637,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
       match (n, m) with
       | BitWidth_Determined e_n, BitWidth_Determined e_m ->
           let v_n = eval' tenv e_n and v_m = eval' tenv e_m in
-          assert_true (ASTUtils.value_equal v_n v_m) ()
+          check_true' (ASTUtils.value_equal v_n v_m) ()
       | _ -> assumption_failed ()
 
   let has_bitvector_structure tenv t =
@@ -684,7 +690,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
               any
                 [
                   (* Optimisation. *)
-                  assert_true (ASTUtils.type_equal t1 t2);
+                  check_true' (ASTUtils.type_equal t1 t2);
                   (* If an argument of a comparison operation is a constrained
                      integer then it is treated as an unconstrained integer. *)
                   both
@@ -701,7 +707,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                   (fun () ->
                     match (t1.desc, t2.desc) with
                     | T_Enum li1, T_Enum li2 ->
-                        assert_true
+                        check_true'
                           (ASTUtils.list_equal String.equal li1 li2)
                           ()
                     | _ -> assumption_failed ());
@@ -772,7 +778,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     @@
     match e.desc with
     | E_Literal _ | E_Typed _ | E_Var _ | E_Binop _ | E_Call _ | E_Unop _
-    | E_Cond _ | E_Tuple _ | E_Concat _ ->
+    | E_Cond _ | E_Tuple _ | E_Concat _ | E_Record _ | E_Unknown _ ->
         assert false
     | E_Slice (e', slices) -> (
         let reduced =
@@ -794,14 +800,6 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         let e = tr e in
         let ty = infer tenv lenv e in
         E_GetFields (e, fields, TA_InferredStructure ty)
-    | E_Record (ty, fields, _ta) ->
-        let ta = get_structure tenv.globals ty
-        and fields =
-          let one_field (name, e) = (name, tr e) in
-          List.map one_field fields
-        in
-        E_Record (ty, fields, TA_InferredStructure ta)
-    | E_Unknown t -> E_Unknown (get_structure tenv.globals t)
     | E_Pattern (e', p) -> E_Pattern (tr e', p)
 
   and try_annotate_expr tenv lenv e =
@@ -947,6 +945,50 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         in
         ( T_Bits (w, []) |> ASTUtils.add_pos_from e,
           E_Concat es |> add_pos_from e )
+    | E_Record (t, fields, _ta) ->
+        (* Rule WBCQ: The identifier in a record expression must be a named type
+           with the structure of a record type, and whose fields have the values
+           given in the field_assignment_list. *)
+        let+ () =
+          check_true (Types.is_named t) (fun () ->
+              failwith "Typing error: should be a named type")
+        in
+        let t_struct = get_structure tenv.globals t in
+        let field_types = get_record_fields e tenv t in
+        let fields =
+          best_effort fields (fun _ ->
+              (* Rule DYQZ: A record expression shall assign every field of the record. *)
+              if
+                List.for_all
+                  (fun (name, _) -> List.mem_assoc name fields)
+                  field_types
+              then ()
+              else fatal_from e (Error.BadFields (List.map fst fields, t));
+              (* and whose fields have the values given in the field_assignment_list. *)
+              List.map
+                (fun (name, e') ->
+                  let t', e' = annotate_expr tenv lenv e' in
+                  let t_spec' =
+                    match List.assoc_opt name field_types with
+                    | None -> fatal_from e (Error.BadField (name, t))
+                    | Some t_spec' -> t_spec'
+                  in
+                  (* TODO: No type checking rule exists here, I interprete
+                     Rule LXQZ: A storage element of type S, where S is any
+                     type that does not have the structure of the
+                     under-constrained integer type, may only be assigned
+                     or initialized with a value of type T if T
+                     type-satisfies S. *)
+                  let+ () = check_type_satisfies e tenv t' t_spec' in
+                  (name, e'))
+                fields)
+        in
+        ( t_struct,
+          E_Record (t, fields, TA_InferredStructure t_struct) |> add_pos_from e
+        )
+    | E_Unknown t ->
+        let t = get_structure tenv.globals t in
+        (t, E_Unknown t |> add_pos_from e)
     | _ ->
         let e = annotate_expr_fallback tenv lenv e in
         let t = best_effort t_bool (fun _ -> infer tenv lenv e) in
