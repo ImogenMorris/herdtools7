@@ -6,6 +6,7 @@ open Test_helpers.Helpers
 open Test_helpers.Helpers.Infix
 
 let empty_env : env = (IMap.empty, IMap.empty)
+let integer = !!(T_Int None)
 
 let builtin_examples () =
   let assert_is_builtin_singular t =
@@ -56,7 +57,6 @@ let builtin_examples () =
   ()
 
 let structure_example () =
-  let integer = !!(T_Int None) in
   (* type T1 of integer; *)
   let t1 = !!(T_Named "T1") in
   (* type T2 of (integer, T1); *)
@@ -100,6 +100,21 @@ let subtype_examples () =
 
   ()
 
+let type_examples () =
+  let bits_4 = !!(T_Bits (BitWidth_Determined !$4, None)) in
+  let bits_n = !!(T_Bits (BitWidth_Determined !%"N", None)) in
+  let bits_n' = !!(T_Bits (BitWidth_Determined !%"N", None)) in
+
+  assert (type_satisfies empty_env bits_n bits_n');
+
+  assert (not (type_satisfies empty_env !!T_Bool integer));
+  assert (not (type_satisfies empty_env bits_4 integer));
+  assert (type_satisfies empty_env integer integer);
+  assert (type_satisfies empty_env bits_4 bits_4);
+  assert (type_satisfies empty_env !!T_Bool !!T_Bool);
+
+  ()
+
 let lca_examples () =
   let bits_4 = !!(T_Bits (BitWidth_Determined !$4, None)) in
   let bits_2 = !!(T_Bits (BitWidth_Determined !$2, None)) in
@@ -126,4 +141,5 @@ let () =
       ("types.structure_example", structure_example);
       ("types.subtype_example", subtype_examples);
       ("types.lca_example", lca_examples);
+      ("types.types_examples", type_examples);
     ]

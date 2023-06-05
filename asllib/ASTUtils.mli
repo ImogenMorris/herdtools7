@@ -43,6 +43,7 @@ val value_equal : value -> value -> bool
 val slice_equal : slice -> slice -> bool
 val slices_equal : slice list -> slice list -> bool
 val type_equal : ty -> ty -> bool
+val bitwidth_equal : bits_constraint -> bits_constraint -> bool
 val expr_of_lexpr : lexpr -> expr
 val fresh_var : string -> string
 val big_union : expr list -> expr
@@ -57,3 +58,6 @@ val default_t_bits : type_desc
 
 val patch : src:AST.t -> patches:AST.t -> AST.t
 (** [patch ~src ~patches] replaces in [src] the global identifiers defined by [patches]. *)
+
+val constraint_binop :
+  binop -> int_constraints -> int_constraints -> int_constraints

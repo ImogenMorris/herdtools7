@@ -80,6 +80,9 @@ end
 val subtype_satisfies : env -> ty -> ty -> bool
 (** Subtype-satisfation as per Definition TRVR. *)
 
+val domain_subtype_satisfies : env -> ty -> ty -> bool
+val structural_subtype_satisfies : env -> ty -> ty -> bool
+
 val type_satisfies : env -> ty -> ty -> bool
 (** Type-satisfation as per Rule FMXK. *)
 

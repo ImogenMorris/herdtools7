@@ -73,9 +73,9 @@ begin
   return BitCount(x) == 0;
 end
 
-func IsOnes(x :: bits(n)) => boolean
+func IsOnes{N}(x :: bits(N)) => boolean
 begin
-  return x == Ones(Len(x));
+  return x == Ones(N);
 end
 
 func SignExtend(x::bits(M), N::integer) => bits(N)
@@ -98,24 +98,27 @@ begin
   return N - 1 - HighestSetBit(x);
 end
 
-func CountLeadingSignBits{N}(x :: bits(N)) => integer
+// Leading sign bits in a bitvector. Count the number of consecutive
+// bits following the leading bit, that are equal to it.
+func CountLeadingSignBits{N}(x::bits(N)) => integer{0..N}
 begin
   return CountLeadingZeroBits(x[N-1:1] EOR x[N-2:0]);
 end
 
-func AlignDown{N}(x :: bits(N), y :: integer) => bits(N)
+// Treating input as an integer, align down to nearest multiple of 2^y.
+func AlignDown{N}(x:: bits(N), y:: integer{1..N}) => bits(N)
 begin
-  if N <= y then return Zeros(N);
-  else
-    return x AND [Ones(N - y), Zeros(y)];
-  end
+    return [x[N-1,N-y], Zeros(y)];
 end
 
-func AlignUp{N} (x :: bits(N), y :: integer) => bits(N)
+// Treating input as an integer, align up to nearest multiple of 2^y.
+// Returns zero if the result is not representable in N bits.
+func AlignUp{N}(x::bits(N), y::integer{1..N}) => bits(N)
 begin
-  if N <= y then return Zeros(N);
+  if IsZero(x[y-1:0]) then
+    return x;
   else
-    return AlignDown(x, y) + ['1', Zeros(y)];
+    return [x[N-1:y]+1, Zeros(y)];
   end
 end
 

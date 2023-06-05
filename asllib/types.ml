@@ -85,22 +85,6 @@ let rec is_non_primitive ty =
 
 let is_primitive ty = not (is_non_primitive ty)
 
-let eval _env e =
-  let v =
-    StaticInterpreter.static_eval
-      (fun _s ->
-        failwith
-          "Not yet implemented: environment lookup in static evaluation for \
-           typechecking.")
-      e
-  in
-  match v with
-  | V_Int i -> i
-  | _ ->
-      failwith
-        "Type error? Cannot use an expression that is not an int in a \
-         constraint."
-
 module Domain = struct
   module IntSet = Set.Make (Int)
 
@@ -122,6 +106,19 @@ module Domain = struct
     if bot > top then acc
     else add_interval_to_intset (IntSet.add bot acc) (bot + 1) top
 
+  exception StaticEvaluationTop
+
+  let eval _env e =
+    let v =
+      StaticInterpreter.static_eval (fun _s -> raise StaticEvaluationTop) e
+    in
+    match v with
+    | V_Int i -> i
+    | _ ->
+        failwith
+          "Type error? Cannot use an expression that is not an int in a \
+           constraint."
+
   let add_constraint_to_intset env acc = function
     | Constraint_Exact e -> IntSet.add (eval env e) acc
     | Constraint_Range (bot, top) ->
@@ -129,11 +126,15 @@ module Domain = struct
         add_interval_to_intset acc bot top
 
   let int_set_of_int_constraints env constraints =
-    Finite
-      (List.fold_left (add_constraint_to_intset env) IntSet.empty constraints)
+    try
+      Finite
+        (List.fold_left (add_constraint_to_intset env) IntSet.empty constraints)
+    with StaticEvaluationTop -> Top
 
   let rec int_set_of_bits_width env = function
-    | BitWidth_Determined e -> Finite (IntSet.singleton (eval env e))
+    | BitWidth_Determined e -> (
+        try Finite (IntSet.singleton (eval env e))
+        with StaticEvaluationTop -> Top)
     | BitWidth_ConstrainedFormType ty -> (
         match of_type env ty with
         | D_Bits is | D_Int is -> is
@@ -189,6 +190,12 @@ module Domain = struct
     match (d1, d2) with
     | D_Bool, D_Bool | D_String, D_String | D_Real, D_Real -> true
     | D_Symbols s1, D_Symbols s2 -> ISet.subset s1 s2
+    | D_Int _, D_Int Top -> true
+    | D_Int Top, D_Int _ -> false
+    | D_Int (Finite is1), D_Int (Finite is2) -> IntSet.subset is1 is2
+    | D_Bits _, D_Bits Top -> true
+    | D_Bits Top, D_Bits _ -> false
+    | D_Bits (Finite is1), D_Bits (Finite is2) -> IntSet.subset is1 is2
     | _ -> false
 end
 
@@ -244,8 +251,7 @@ let rec structural_subtype_satisfies env t s =
   *)
   | T_Bits (w_s, bf_s), T_Bits (w_t, bf_t) -> (
       (match (w_s, w_t) with
-      | BitWidth_Determined e_s, BitWidth_Determined e_t ->
-          eval env e_s = eval env e_t
+      | BitWidth_Determined e_s, BitWidth_Determined e_t -> expr_equal e_s e_t
       | BitWidth_Determined _, _ -> false
       | BitWidth_Constrained _, _ -> true
       | _ -> true)
@@ -300,13 +306,19 @@ and domain_subtype_satisfies env t s =
          then the domain of T must be a subset of the domain of S. *)
   | T_Tuple _ | T_Array _ | T_Record _ | T_Exception _ -> true
   | T_Real | T_String | T_Bool | T_Enum _ | T_Int _ ->
-      Domain.(is_subset (of_type env (get_structure env t)) (of_type env s))
-  | T_Bits _ ->
+      Domain.(
+        is_subset (of_type env (get_structure env t)) (of_type env s_struct))
+  | T_Bits (width_s, _) -> (
       (* If either S or T have the structure of a bitvector type with
          undetermined width then the domain of T must be a subset of the domain
          of S. *)
-      (* TODO *)
-      assert false
+      (* Implicitely, T must have the structure of a bitvector. *)
+      let t_struct = get_structure env t in
+      match (width_s, t_struct.desc) with
+      | BitWidth_Constrained _, T_Bits _ | _, T_Bits (BitWidth_Constrained _, _)
+        ->
+          Domain.(is_subset (of_type env s_struct) (of_type env t_struct))
+      | _ -> false)
 
 and subtype_satisfies env t s =
   structural_subtype_satisfies env t s && domain_subtype_satisfies env t s
@@ -322,8 +334,9 @@ and type_satisfies env t s =
   (* T is an anonymous bitvector with no bitfields and S has the structure of a
      bitvector (with or without bitfields) of the same width as T. *)
   match (t.desc, (get_structure env s).desc) with
-  | T_Bits (width_t, None), T_Bits (width_s, _) -> width_t = width_s
-  | _ -> true
+  | T_Bits (width_t, None), T_Bits (width_s, _) ->
+      bitwidth_equal width_t width_s
+  | _ -> false
 
 let rec type_clashes env t s =
   (*

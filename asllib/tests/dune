@@ -10,7 +10,7 @@
   (libraries asllib test_helpers)
   (deps (glob_files asl/required/*.asl) asltests.ml ../libdir/stdlib.asl)
   (action
-    (setenv ASL_LIBDIR %{project_root}/asllib/libdir
+    (setenv ASL_LIBDIR %{project_root}/asllib/libdir/
       (run %{test} asl/required))))
 
 (tests
@@ -18,5 +18,8 @@
   (modules static bitvector types)
   (modes native)
   (deps (:standard ../libdir/stdlib.asl))
-  (libraries asllib test_helpers))
+  (libraries asllib test_helpers)
+  (action 
+    (setenv ASL_LIBDIR %{project_root}/asllib/libdir/
+      (run %{test} -e))))
 

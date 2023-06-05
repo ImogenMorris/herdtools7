@@ -267,10 +267,11 @@ let sum = function
 let slices_length =
   let open ASTUtils in
   let minus = binop MINUS in
+  let one = expr_of_int 1 in
   let slice_length = function
-    | Slice_Single _ -> expr_of_int 1
+    | Slice_Single _ -> one
     | Slice_Length (_, e) -> e
-    | Slice_Range (e1, e2) -> minus e1 e2
+    | Slice_Range (e1, e2) -> plus one (minus e1 e2)
   in
   fun li -> List.map slice_length li |> sum
 
@@ -307,11 +308,6 @@ let rename_ty_eqs (eqs : (AST.identifier * AST.expr) list) ty =
       let new_e = IMap.find callee_var mapping |> ASTUtils.with_pos_from e in
       T_Bits (BitWidth_Determined new_e, fields) |> add_pos_from ty
   | _ -> ty
-
-let get_bitvector_width loc t =
-  match t.desc with
-  | T_Bits (n, _) -> n
-  | _ -> conflict loc [ ASTUtils.default_t_bits ] t
 
 (******************************************************************************)
 (*                                                                            *)
@@ -531,6 +527,8 @@ module type ANNOTATE_CONFIG = sig
 end
 
 module Annotate (C : ANNOTATE_CONFIG) = struct
+  exception TypingAssumptionFailed
+
   let _warn =
     match C.check with `Warn | `TypeCheck -> true | `Silence -> false
 
@@ -556,13 +554,14 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
             x)
     | `Silence -> ( fun x f -> try f x with Error.ASLException _ -> x)
 
-  let ( let+ ) m f = check m () |> f
+  let[@inline] ( let+ ) m f = check m () |> f
 
-  let both f1 f2 x =
+  let[@inline] both f1 f2 x =
     let _ = f1 x in
     f2 x
 
-  let either f1 f2 x = try f1 x with Error.ASLException _ -> f2 x
+  let either f1 f2 x =
+    try f1 x with TypingAssumptionFailed | Error.ASLException _ -> f2 x
 
   let rec any li x =
     match li with
@@ -570,17 +569,47 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | [ f ] -> f x
     | f :: li -> either f (any li) x
 
+  let assumption_failed () = raise_notrace TypingAssumptionFailed [@@inline]
+  let assert_true b () = if b then () else assumption_failed () [@@inline]
+
+  let eval' _tenv =
+    let lookup _s = assumption_failed () in
+    StaticInterpreter.static_eval lookup
+
+  let check_type_satisfies' tenv t1 t2 () =
+    if Types.type_satisfies (tenv.globals, IMap.empty) t1 t2 then ()
+    else raise_notrace TypingAssumptionFailed
+
+  let get_bitvector_width' tenv t =
+    match (get_structure tenv.globals t).desc with
+    | T_Bits (n, _) -> n
+    | _ -> assumption_failed ()
+
   (** [check_type_satisfies t1 t2] if [t1 <: t2]. *)
   let check_type_satisfies loc tenv t1 t2 () =
-    match subtypes tenv t1 t2 with
-    | Some _eqs -> ()
-    | None -> conflict loc [ t2.desc ] t1
+    if Types.type_satisfies (tenv.globals, IMap.empty) t1 t2 then ()
+    else conflict loc [ t2.desc ] t1
 
   (** [check_structure_boolean env t1] checks that [t1] has the structure of a boolean. *)
   let check_structure_boolean loc tenv t1 () =
     match (get_structure tenv.globals t1).desc with
     | T_Bool -> ()
     | _ -> conflict loc [ T_Bool ] t1
+
+  let check_bv_have_same_determined_bitwidth' tenv t1 t2 () =
+    let n = get_bitvector_width' tenv t1 and m = get_bitvector_width' tenv t2 in
+    if ASTUtils.bitwidth_equal n m then ()
+    else
+      match (n, m) with
+      | BitWidth_Determined e_n, BitWidth_Determined e_m ->
+          let v_n = eval' tenv e_n and v_m = eval' tenv e_m in
+          assert_true (ASTUtils.value_equal v_n v_m) ()
+      | _ -> assumption_failed ()
+
+  let has_bitvector_structure tenv t =
+    match (get_structure tenv.globals t).desc with
+    | T_Bits _ -> true
+    | _ -> false
 
   let t_bool = T_Bool |> add_dummy_pos
   let t_int = T_Int None |> add_dummy_pos
@@ -596,71 +625,97 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
       (fun () ->
         match op with
         | BAND | BOR | BEQ | IMPL ->
-            let+ () = check_type_satisfies loc tenv t1 t_bool in
-            let+ () = check_type_satisfies loc tenv t2 t_bool in
+            let+ () = check_type_satisfies' tenv t1 t_bool in
+            let+ () = check_type_satisfies' tenv t2 t_bool in
             T_Bool |> with_loc
         | AND | OR | EOR ->
-            let n = get_bitvector_width loc t1 in
-            let+ () = check_type_satisfies loc tenv t2 t1 in
+            (* Rule KXMR: If the operands of a primitive operation are
+               bitvectors, the widths of the operands must be equivalent
+               statically evaluable expressions. *)
+            (* TODO: We cannot perform that at the moment, as it needs a
+               symbolic expression solver. *)
+            (*
+            let+ () = check_bv_have_same_determined_bitwidth' tenv t1 t2 in
+            *)
+            let n = get_bitvector_width' tenv t1 in
+            T_Bits (n, None) |> with_loc
+        | (PLUS | MINUS) when has_bitvector_structure tenv t1 ->
+            (* Rule KXMR: If the operands of a primitive operation are
+               bitvectors, the widths of the operands must be equivalent
+               statically evaluable expressions. *)
+            let+ () =
+              either
+                (check_bv_have_same_determined_bitwidth' tenv t1 t2)
+                (check_type_satisfies' tenv t2 t_int)
+            in
+            let n = get_bitvector_width' tenv t1 in
             T_Bits (n, None) |> with_loc
         | EQ_OP | NEQ ->
             (* Wrong! *)
             let+ () =
               any
                 [
+                  (* Optimisation. *)
+                  assert_true (ASTUtils.type_equal t1 t2);
+                  (* If an argument of a comparison operation is a constrained
+                     integer then it is treated as an unconstrained integer. *)
                   both
-                    (check_type_satisfies loc tenv t1 t_int)
-                    (check_type_satisfies loc tenv t2 t_int);
+                    (check_type_satisfies' tenv t1 t_int)
+                    (check_type_satisfies' tenv t2 t_int);
+                  (* If the arguments of a comparison operation are bitvectors
+                     then they must have the same determined width. *)
+                  check_bv_have_same_determined_bitwidth' tenv t1 t2;
+                  (* The rest are redundancies from the first equal types
+                     cases, but provided for completeness. *)
                   both
-                    (check_type_satisfies loc tenv t1 t_bool)
-                    (check_type_satisfies loc tenv t2 t_bool);
-                  (fun () ->
-                    let n = get_bitvector_width loc t1 in
-                    check_type_satisfies loc tenv t2
-                      (T_Bits (n, None) |> add_dummy_pos)
-                      ());
+                    (check_type_satisfies' tenv t1 t_bool)
+                    (check_type_satisfies' tenv t2 t_bool);
                   (fun () ->
                     match (t1.desc, t2.desc) with
-                    | T_Enum li1, T_Enum li2
-                      when List.compare_lengths li1 li2 = 0
-                           && List.for_all2 String.equal li1 li2 ->
-                        ()
-                    | _ -> fatal_from loc (Error.BadTypesForBinop (op, t1, t2)));
+                    | T_Enum li1, T_Enum li2 ->
+                        assert_true
+                          (ASTUtils.list_equal String.equal li1 li2)
+                          ()
+                    | _ -> assumption_failed ());
                 ]
             in
             T_Bool |> with_loc
         | LEQ | GEQ | GT | LT ->
-            let+ () = check_type_satisfies loc tenv t1 t_int in
-            let+ () = check_type_satisfies loc tenv t2 t_int in
+            let+ () = check_type_satisfies' tenv t1 t_int in
+            let+ () = check_type_satisfies' tenv t2 t_int in
             T_Bool |> with_loc
-        | PLUS | MINUS ->
-            either
-              (fun () ->
-                let+ () =
-                  both
-                    (check_type_satisfies loc tenv t1 t_int)
-                    (check_type_satisfies loc tenv t2 t_int)
-                in
-                t_int)
-              (fun () ->
-                let n = get_bitvector_width loc t1 in
-                let t = T_Bits (n, None) |> add_dummy_pos in
-                let+ () =
-                  either
-                    (check_type_satisfies loc tenv t2 t)
-                    (check_type_satisfies loc tenv t2 t_int)
-                in
-                t)
-              ()
-        | MUL | DIV | MOD | SHL | SHR ->
-            let+ () = check_type_satisfies loc tenv t1 t_int in
-            let+ () = check_type_satisfies loc tenv t2 t_int in
-            (* TODO: Work on constraints. *)
-            T_Int None |> with_loc
+        | MUL | DIV | MOD | SHL | SHR | PLUS | MINUS -> (
+            (* TODO: ensure that they mean "has the structure of" instead of
+               "is" *)
+            let struct1 = get_structure tenv.globals t1
+            and struct2 = get_structure tenv.globals t2 in
+            match (struct1.desc, struct2.desc) with
+            | T_Int None, T_Int _ | T_Int _, T_Int None ->
+                (* Rule ZYWY: If both operands of an integer binary primitive
+                   operator are integers and at least one of them is an
+                   unconstrained integer then the result shall be an
+                   unconstrained integer. *)
+                (* TODO: check that no other checks are necessary. *)
+                T_Int None |> with_loc
+            | T_Int (Some []), T_Int (Some _) | T_Int (Some _), T_Int (Some [])
+              ->
+                (* Rule BZKW: If both operands of an integer binary primitive
+                   operator are constrained integers and at least one of them
+                   is the under-constrained integer then the result shall be an
+                   under-constrained integer. *)
+                T_Int (Some []) |> with_loc
+            | T_Int (Some cs1), T_Int (Some cs2) ->
+                (* Rule KFYS: If both operands of an integer binary primitive
+                   operation are well-constrained integers, then it shall
+                   return a constrained integer whose constraint is calculated
+                   by applying the operation to all possible value pairs. *)
+                (* TODO: check for division by zero? cf I YHRP: The calculation
+                   of constraints shall cause an error if necessary, for
+                   example where a division by zero occurs, etc. *)
+                T_Int (Some (ASTUtils.constraint_binop op cs1 cs2)) |> with_loc
+            | _ -> assumption_failed ())
         | RDIV ->
-            let+ () =
-              check_type_satisfies loc tenv t1 (T_Real |> add_dummy_pos)
-            in
+            let+ () = check_type_satisfies' tenv t1 (T_Real |> add_dummy_pos) in
             T_Real |> with_loc)
       (fun () -> fatal_from loc (Error.BadTypesForBinop (op, t1, t2)))
       ()
@@ -688,29 +743,9 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     add_pos_from e
     @@
     match e.desc with
-    | E_Literal _ -> e.desc
-    | E_Typed (e, t) -> E_Typed (tr e, t)
-    | E_Var x -> (
-        match getter_should_reduce_to_call tenv x [] with
-        | None -> e.desc
-        | Some (name, args) -> E_Call (name, args, []) |> tr_desc)
-    | E_Binop (BAND, e1, e2) ->
-        E_Cond (e1, e2, E_Literal (V_Bool false) |> ASTUtils.add_pos_from e)
-        |> tr_desc
-    | E_Binop (BOR, e1, e2) ->
-        E_Cond (e1, E_Literal (V_Bool true) |> ASTUtils.add_pos_from e, e2)
-        |> tr_desc
-    | E_Binop (op, e1, e2) -> E_Binop (op, tr e1, tr e2)
-    | E_Unop (op, e) -> E_Unop (op, tr e)
-    | E_Call (x, args, named_args) ->
-        let args = List.map tr args in
-        let arg_types = List.map (infer tenv lenv) args in
-        let extra_nargs, x' = FunctionRenaming.find_name tenv x arg_types in
-        let () =
-          if false && not (String.equal x x') then
-            Format.eprintf "Renaming call from %s to %s.@." x x'
-        in
-        E_Call (x', args, List.rev_append named_args extra_nargs)
+    | E_Literal _ | E_Typed _ | E_Var _ | E_Binop _ | E_Call _ | E_Unop _
+    | E_Cond _ ->
+        assert false
     | E_Slice (e', slices) -> (
         let reduced =
           match e'.desc with
@@ -720,10 +755,6 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         match reduced with
         | Some (name, args) -> E_Call (name, args, []) |> tr_desc
         | None -> E_Slice (tr e', annotate_slices tenv lenv slices))
-    | E_Cond (e1, e2, e3) ->
-        let e2 = try_annotate_expr tenv lenv e2
-        and e3 = try_annotate_expr tenv lenv e3 in
-        E_Cond (tr e1, e2, e3)
     | E_GetField (e', field, _ta) -> (
         let e' = tr e' in
         let ty = infer tenv lenv e' in
@@ -769,8 +800,21 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | E_Typed (e', t) ->
         let t = get_structure tenv.globals t in
         let t_e, e'' = annotate_expr tenv lenv e' in
-        let+ () = check_type_satisfies e tenv t t_e in
-        (t, E_Typed (e'', t) |> add_pos_from e)
+        (* - If type-checking determines that the expression type-satisfies
+             the required type, then no further check is required.
+           - If the expression only fails to type-satisfy the required type
+             because the domain of its type is not a subset of the domain of
+             the required type, an execution-time check that the expression
+             evaluates to a value in the domain of the required type is
+             required. *)
+        best_effort
+          (t, E_Typed (e'', t) |> add_pos_from e)
+          (fun res ->
+            let tenv' = (tenv.globals, IMap.empty) in
+            if Types.structural_subtype_satisfies tenv' t_e t then
+              if Types.domain_subtype_satisfies tenv' t_e t then (t_e, e'')
+              else res
+            else conflict e [ t_e.desc ] t)
     | E_Var x -> (
         let () = if false then Format.eprintf "Looking at %S.@." x in
         match getter_should_reduce_to_call tenv x [] with
@@ -786,7 +830,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                 Format.eprintf "@[Choosing not to reduce var %S@ at @[%a@]@]@."
                   x PP.pp_pos e
             in
-            (lookup tenv lenv e x |> get_structure tenv.globals, e))
+            (lookup tenv lenv e x, e))
     | E_Binop (BAND, e1, e2) ->
         E_Cond (e1, e2, E_Literal (V_Bool false) |> add_pos_from e)
         |> add_pos_from e |> annotate_expr tenv lenv

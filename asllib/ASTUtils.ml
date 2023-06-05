@@ -318,3 +318,19 @@ let patch ~src ~patches =
   in
   let filter d = not (ISet.mem (identifier_of_decl d) to_remove) in
   src |> List.filter filter |> List.rev_append patches
+
+let cross_prod f li1 li2 =
+  List.fold_left
+    (fun xys x -> List.fold_left (fun xys' y -> f x y :: xys') xys li2)
+    [] li1
+
+exception FailedConstraintOp
+
+let constraint_binop op =
+  let do_op c1 c2 =
+    match (c1, c2) with
+    | Constraint_Exact e1, Constraint_Exact e2 ->
+        Constraint_Exact (binop op e1 e2)
+    | _ -> raise_notrace FailedConstraintOp
+  in
+  fun cs1 cs2 -> try cross_prod do_op cs1 cs2 with FailedConstraintOp -> []
