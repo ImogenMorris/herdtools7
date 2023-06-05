@@ -143,9 +143,7 @@ and pp_ty =
     | T_String -> addb f "T_String"
     | T_Bool -> addb f "T_Bool"
     | T_Bits (bits_constraint, fields) ->
-        let pp_fields =
-          pp_option @@ pp_list @@ pp_pair pp_string pp_slice_list
-        in
+        let pp_fields = pp_list @@ pp_pair pp_string pp_slice_list in
         bprintf f "T_Bits (%a, %a)" pp_bits_constraint bits_constraint pp_fields
           fields
     | T_Enum enum_type_desc ->

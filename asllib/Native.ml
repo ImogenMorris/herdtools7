@@ -188,7 +188,7 @@ module NativeStdlib = struct
 
   let primitives =
     let with_pos = ASTUtils.add_dummy_pos in
-    let t_bits e = T_Bits (BitWidth_Determined e, None) |> with_pos in
+    let t_bits e = T_Bits (BitWidth_Determined e, []) |> with_pos in
     let e_var x = E_Var x |> with_pos in
     let integer = T_Int None |> with_pos in
     [

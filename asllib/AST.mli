@@ -137,7 +137,7 @@ and type_desc =
   | T_Real
   | T_String
   | T_Bool
-  | T_Bits of bits_constraint * bitfields option
+  | T_Bits of bits_constraint * bitfields
   | T_Enum of identifier list
   | T_Tuple of ty list
   | T_Array of expr * ty

@@ -60,6 +60,9 @@ module Domain : sig
   type t
   (** Abstract value set. *)
 
+  val pp : Format.formatter -> t -> unit
+  (** A printer for the domain type. *)
+
   val of_type : env -> ty -> t
   (** Construct the domain of a type. *)
 

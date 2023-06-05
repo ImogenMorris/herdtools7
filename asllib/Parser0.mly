@@ -23,7 +23,7 @@
     let open AST in
     T_Bits (
       BitWidth_Determined (E_Literal (V_Int 1) |> ASTUtils.add_dummy_pos),
-      None)
+      [])
 %}
 
 %token <string> IDENTIFIER STRING_LIT MASK_LIT
@@ -200,7 +200,7 @@ let decl ==
 let annotated(x) == desc = x; { AST.{ desc; pos_start=$symbolstartpos; pos_end=$endpos }}
 
 let unimplemented_decl(x) == x; { None }
-let unimplemented_ty(x) == x; { AST.(T_Bits (BitWidth_Determined (E_Literal (V_Int 0) |> ASTUtils.add_dummy_pos), None)) }
+let unimplemented_ty(x) == x; { AST.(T_Bits (BitWidth_Determined (E_Literal (V_Int 0) |> ASTUtils.add_dummy_pos), [])) }
 
 
 let type_decl ==
@@ -252,7 +252,7 @@ let ty_non_tuple ==
   | BOOLEAN;  { AST.T_Bool      }
   | ~=tident; < AST.T_Named     >
   | BIT;      { t_bit           }
-  | BITS; e=pared(expr); { AST.(T_Bits (AST.BitWidth_Determined e, None)) }
+  | BITS; e=pared(expr); { AST.(T_Bits (AST.BitWidth_Determined e, [])) }
   (* | tident; pared(clist(expr)); <> *)
 
   | unimplemented_ty (

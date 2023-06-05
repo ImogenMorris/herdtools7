@@ -257,7 +257,16 @@ end
 
 let expr_of_int i = ASTUtils.literal (V_Int i)
 let plus = ASTUtils.binop PLUS
-let t_bits_bitwidth e = T_Bits (BitWidth_Determined e, None)
+let t_bits_bitwidth e = T_Bits (BitWidth_Determined e, [])
+
+let reduce_constants =
+  let exception TrivialReductionFailed in
+  let lookup _s = raise_notrace TrivialReductionFailed in
+  fun e ->
+    try
+      let v = StaticInterpreter.static_eval lookup e in
+      E_Literal v |> add_pos_from e
+    with TrivialReductionFailed -> e
 
 let sum = function
   | [] -> expr_of_int 0
@@ -273,7 +282,7 @@ let slices_length =
     | Slice_Length (_, e) -> e
     | Slice_Range (e1, e2) -> plus one (minus e1 e2)
   in
-  fun li -> List.map slice_length li |> sum
+  fun li -> List.map slice_length li |> sum |> reduce_constants
 
 let field_type pos x ty =
   match ty.desc with
@@ -281,7 +290,7 @@ let field_type pos x ty =
       match List.assoc_opt x li with
       | Some ty -> ty
       | None -> bad_field pos x ty)
-  | T_Bits (_, Some fields) -> (
+  | T_Bits (_, fields) -> (
       match List.assoc_opt x fields with
       | Some slices ->
           slices_length slices |> t_bits_bitwidth |> add_pos_from ty
@@ -291,7 +300,7 @@ let field_type pos x ty =
 let fields_type pos xs ty =
   let field_length =
     match ty.desc with
-    | T_Bits (_, Some fields) -> (
+    | T_Bits (_, fields) -> (
         fun x ->
           match List.assoc_opt x fields with
           | None -> bad_field pos x ty
@@ -395,8 +404,8 @@ let rec infer tenv lenv e =
         | T_Bits _ -> not_yet_implemented e "bitvector length inference"
         | _ -> conflict e [ ASTUtils.default_t_bits ] ty
       in
-      let length = List.fold_left get_length (expr_of_int 0) es in
-      t_bits_bitwidth length |> add_dummy_pos
+      List.fold_left get_length (expr_of_int 0) es
+      |> reduce_constants |> t_bits_bitwidth |> add_dummy_pos
   | E_Tuple es -> T_Tuple (List.map (infer tenv lenv) es) |> add_dummy_pos
   | E_Unknown ty -> get_structure tenv.globals ty
   | E_Pattern _ -> T_Bool |> ASTUtils.add_pos_from e
@@ -638,7 +647,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
             let+ () = check_bv_have_same_determined_bitwidth' tenv t1 t2 in
             *)
             let n = get_bitvector_width' tenv t1 in
-            T_Bits (n, None) |> with_loc
+            T_Bits (n, []) |> with_loc
         | (PLUS | MINUS) when has_bitvector_structure tenv t1 ->
             (* Rule KXMR: If the operands of a primitive operation are
                bitvectors, the widths of the operands must be equivalent
@@ -649,7 +658,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                 (check_type_satisfies' tenv t2 t_int)
             in
             let n = get_bitvector_width' tenv t1 in
-            T_Bits (n, None) |> with_loc
+            T_Bits (n, []) |> with_loc
         | EQ_OP | NEQ ->
             (* Wrong! *)
             let+ () =
@@ -744,7 +753,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     @@
     match e.desc with
     | E_Literal _ | E_Typed _ | E_Var _ | E_Binop _ | E_Call _ | E_Unop _
-    | E_Cond _ ->
+    | E_Cond _ | E_Tuple _ ->
         assert false
     | E_Slice (e', slices) -> (
         let reduced =
@@ -774,7 +783,6 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         in
         E_Record (ty, fields, TA_InferredStructure ta)
     | E_Concat es -> E_Concat (List.map tr es)
-    | E_Tuple es -> E_Tuple (List.map tr es)
     | E_Unknown t -> E_Unknown (get_structure tenv.globals t)
     | E_Pattern (e', p) -> E_Pattern (tr e', p)
 
@@ -904,6 +912,9 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
               | Some t -> t)
         in
         (t, E_Cond (e_cond, e_true, e_false) |> add_pos_from e)
+    | E_Tuple li ->
+        let ts, es = List.map (annotate_expr tenv lenv) li |> List.split in
+        (T_Tuple ts |> ASTUtils.add_pos_from e, E_Tuple es |> add_pos_from e)
     | _ ->
         let e = annotate_expr_fallback tenv lenv e in
         let t = best_effort t_bool (fun _ -> infer tenv lenv e) in

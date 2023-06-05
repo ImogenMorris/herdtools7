@@ -51,7 +51,7 @@
 open AST
 open ASTUtils
 
-let t_bit = T_Bits (BitWidth_Determined (E_Literal (V_Int 1) |> add_dummy_pos), None)
+let t_bit = T_Bits (BitWidth_Determined (E_Literal (V_Int 1) |> add_dummy_pos), [])
 
 %}
 
@@ -337,7 +337,7 @@ let slice ==
   | e1=expr; PLUS_COLON; e2=expr; < Slice_Length  >
 
 (* Bitfields *)
-let bitfields == ioption(braced(tclist(bitfield)))
+let bitfields == loption(braced(tclist(bitfield)))
 let bitfield == s=nslices ; x=IDENTIFIER ; bitfield_spec; { (x, s) }
 (* Bitfield spec -- not yet implemented *)
 let bitfield_spec==
@@ -535,9 +535,11 @@ let decl ==
     | storage_keyword; x=IDENTIFIER; t=as_ty; EQ; e=expr; <D_GlobalConst>
     | TYPE; x=IDENTIFIER; OF; t=ty; subtype_opt;   <D_TypeDecl>
 
+    | VAR; x=IDENTIFIER; t=as_ty;
+      { D_GlobalConst(x, t, E_Unknown t |> ASTUtils.add_pos_from t) }
+
     | unimplemented_decl(
       | storage_keyword; MINUS; ty_opt; EQ; expr;                         <>
-      | VAR; typed_identifier;                                            <>
       | storage_keyword; IDENTIFIER; EQ; expr;                            <>
       | PRAGMA; IDENTIFIER; clist(expr);                                  <>
       | TYPE; IDENTIFIER; SUBTYPES; ty; ioption(WITH; fields_opt);        <>

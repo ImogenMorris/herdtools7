@@ -144,9 +144,9 @@ and pp_ty f t =
   | T_Real -> pp_print_string f "real"
   | T_String -> pp_print_string f "string"
   | T_Bool -> pp_print_string f "boolean"
-  | T_Bits (bits_constraint, None) ->
+  | T_Bits (bits_constraint, []) ->
       fprintf f "@[bits(%a)@]" pp_bits_constraint bits_constraint
-  | T_Bits (bits_constraint, Some fields) ->
+  | T_Bits (bits_constraint, fields) ->
       let pp_bitfield f (name, slices) =
         fprintf f "@[<h>[%a]@ %s@]" pp_slice_list slices name
       in

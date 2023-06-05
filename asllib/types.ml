@@ -106,6 +106,28 @@ module Domain = struct
     if bot > top then acc
     else add_interval_to_intset (IntSet.add bot acc) (bot + 1) top
 
+  let pp_int_set f =
+    let open Format in
+    function
+    | Top -> pp_print_string f "ℤ"
+    | Finite set ->
+        fprintf f "@[{@,%a}@]"
+          (pp_print_seq ~pp_sep:pp_print_space pp_print_int)
+          (IntSet.to_seq set)
+
+  let pp f =
+    let open Format in
+    function
+    | D_Bool -> pp_print_string f "𝔹"
+    | D_String -> pp_print_string f "𝕊"
+    | D_Real -> pp_print_string f "ℚ"
+    | D_Symbols li ->
+        fprintf f "@[{@,%a}@]"
+          (pp_print_seq ~pp_sep:pp_print_space pp_print_string)
+          (ISet.to_seq li)
+    | D_Int set -> pp_int_set f set
+    | D_Bits set -> fprintf f "@[#bits(%a)@]" pp_int_set set
+
   exception StaticEvaluationTop
 
   let eval _env e =
@@ -257,16 +279,16 @@ let rec structural_subtype_satisfies env t s =
       | _ -> true)
       &&
       match (bf_s, bf_t) with
-      | Some bfs_s, Some bfs_t ->
+      | [], _ -> true
+      | _, [] -> false
+      | bfs_s, bfs_t ->
           w_s = w_t
           &&
           let bf_equal (name_s, slices_s) (name_t, slices_t) =
             String.equal name_s name_t && slices_equal slices_s slices_t
           in
           let mem_bf bfs_t bf_s = List.exists (bf_equal bf_s) bfs_t in
-          List.for_all (mem_bf bfs_t) bfs_s
-      | Some _, None -> false
-      | None, _ -> true)
+          List.for_all (mem_bf bfs_t) bfs_s)
   | T_Bits _, _ -> false
   (* If S has the structure of an array type with elements of type E then T
      must have the structure of an array type with elements of type E, and T
@@ -334,8 +356,7 @@ and type_satisfies env t s =
   (* T is an anonymous bitvector with no bitfields and S has the structure of a
      bitvector (with or without bitfields) of the same width as T. *)
   match (t.desc, (get_structure env s).desc) with
-  | T_Bits (width_t, None), T_Bits (width_s, _) ->
-      bitwidth_equal width_t width_s
+  | T_Bits (width_t, []), T_Bits (width_s, _) -> bitwidth_equal width_t width_s
   | _ -> false
 
 let rec type_clashes env t s =

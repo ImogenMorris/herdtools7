@@ -235,8 +235,7 @@ and bitwidth_equal w1 w2 =
   | _ -> false
 
 and bitfields_equal bf1 bf2 =
-  bf1 == bf2
-  || Option.equal (list_equal (pair_equal String.equal slices_equal)) bf1 bf2
+  bf1 == bf2 || (list_equal (pair_equal String.equal slices_equal)) bf1 bf2
 
 let literal v = E_Literal v |> add_dummy_pos
 let var_ x = E_Var x |> add_dummy_pos
@@ -300,7 +299,7 @@ let num_args = function
   | 0 -> Fun.id
   | n -> fun name -> name ^ "-" ^ string_of_int n
 
-let default_t_bits = T_Bits (BitWidth_Constrained [], None)
+let default_t_bits = T_Bits (BitWidth_Constrained [], [])
 
 let patch ~src ~patches =
   (* Size considerations:

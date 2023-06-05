@@ -420,7 +420,7 @@ module Make (B : Backend.S) (C : Config) = struct
     | E_GetFields (e', [ field ], ta) -> (
         let ty = type_of_ta e ta in
         match ty.desc with
-        | T_Bits (_, Some fields) -> (
+        | T_Bits (_, fields) -> (
             match List.assoc_opt field fields with
             | Some slices ->
                 E_Slice (e', slices)
@@ -430,7 +430,7 @@ module Make (B : Backend.S) (C : Config) = struct
     | E_GetFields (e', xs, ta) -> (
         let ty = type_of_ta e ta in
         match ty.desc with
-        | T_Bits (_, Some fields) ->
+        | T_Bits (_, fields) ->
             let one (x : string) =
               match List.assoc_opt x fields with
               | None -> fatal_from e @@ Error.BadField (x, ty)
@@ -562,7 +562,7 @@ module Make (B : Backend.S) (C : Config) = struct
     | LE_SetFields (le', xs, ta) -> (
         let ty = type_of_ta le ta in
         match ty.desc with
-        | T_Bits (_, Some fields) ->
+        | T_Bits (_, fields) ->
             let folder prev_slices x =
               match List.assoc_opt x fields with
               | Some slices -> List.rev_append slices prev_slices
