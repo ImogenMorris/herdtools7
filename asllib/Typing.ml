@@ -284,6 +284,21 @@ let slices_length =
   in
   fun li -> List.map slice_length li |> sum |> reduce_constants
 
+let width_plus acc w =
+  match (acc, w) with
+  | BitWidth_Determined e1, BitWidth_Determined e2 ->
+      BitWidth_Determined (plus e1 e2 |> reduce_constants)
+  | BitWidth_Constrained cs1, BitWidth_Determined e2 ->
+      BitWidth_Constrained
+        (ASTUtils.constraint_binop PLUS cs1 [ Constraint_Exact e2 ])
+  | BitWidth_Determined e1, BitWidth_Constrained cs2 ->
+      BitWidth_Constrained
+        (ASTUtils.constraint_binop PLUS [ Constraint_Exact e1 ] cs2)
+  | BitWidth_Constrained cs1, BitWidth_Constrained cs2 ->
+      BitWidth_Constrained (ASTUtils.constraint_binop PLUS cs1 cs2)
+  | _ ->
+      failwith "Not yet implemented: concatening slices constrained from type."
+
 let field_type pos x ty =
   match ty.desc with
   | T_Record li -> (
@@ -594,6 +609,10 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | T_Bits (n, _) -> n
     | _ -> assumption_failed ()
 
+  let get_bitvector_width loc tenv t =
+    try get_bitvector_width' tenv t
+    with TypingAssumptionFailed -> conflict loc [ ASTUtils.default_t_bits ] t
+
   (** [check_type_satisfies t1 t2] if [t1 <: t2]. *)
   let check_type_satisfies loc tenv t1 t2 () =
     if Types.type_satisfies (tenv.globals, IMap.empty) t1 t2 then ()
@@ -753,7 +772,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     @@
     match e.desc with
     | E_Literal _ | E_Typed _ | E_Var _ | E_Binop _ | E_Call _ | E_Unop _
-    | E_Cond _ | E_Tuple _ ->
+    | E_Cond _ | E_Tuple _ | E_Concat _ ->
         assert false
     | E_Slice (e', slices) -> (
         let reduced =
@@ -782,7 +801,6 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
           List.map one_field fields
         in
         E_Record (ty, fields, TA_InferredStructure ta)
-    | E_Concat es -> E_Concat (List.map tr es)
     | E_Unknown t -> E_Unknown (get_structure tenv.globals t)
     | E_Pattern (e', p) -> E_Pattern (tr e', p)
 
@@ -801,7 +819,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     in
     List.map tr_one
 
-  and annotate_expr tenv lenv e : ty * expr =
+  and annotate_expr tenv lenv (e : expr) : ty * expr =
     let () = if false then Format.eprintf "@[Annotating %a@]@." PP.pp_expr e in
     match e.desc with
     | E_Literal v -> (infer_value v |> ASTUtils.add_pos_from e, e)
@@ -915,6 +933,20 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | E_Tuple li ->
         let ts, es = List.map (annotate_expr tenv lenv) li |> List.split in
         (T_Tuple ts |> ASTUtils.add_pos_from e, E_Tuple es |> add_pos_from e)
+    | E_Concat [] ->
+        ( T_Bits (BitWidth_Determined (expr_of_int 0), [])
+          |> ASTUtils.add_pos_from e,
+          e )
+    | E_Concat (_ :: _ as li) ->
+        let ts, es = List.map (annotate_expr tenv lenv) li |> List.split in
+        let w =
+          best_effort (BitWidth_Constrained []) (fun _ ->
+              let widths = List.map (get_bitvector_width e tenv) ts in
+              let wh = List.hd widths and wts = List.tl widths in
+              List.fold_left width_plus wh wts)
+        in
+        ( T_Bits (w, []) |> ASTUtils.add_pos_from e,
+          E_Concat es |> add_pos_from e )
     | _ ->
         let e = annotate_expr_fallback tenv lenv e in
         let t = best_effort t_bool (fun _ -> infer tenv lenv e) in
