@@ -339,111 +339,12 @@ let rename_ty_eqs (eqs : (AST.identifier * AST.expr) list) ty =
 (*                                                                            *)
 (******************************************************************************)
 
-let check_bitvector pos ty =
-  match ty.desc with
-  | T_Bits _ -> ty
-  | _ -> conflict pos [ ASTUtils.default_t_bits ] ty
-
-let check_integer pos ty =
-  match ty.desc with T_Int _ -> ty | _ -> conflict pos [ T_Int None ] ty
-
-let check_num pos ty =
-  match ty.desc with
-  | T_Int _ | T_Bits _ | T_Real -> ty
-  | _ -> conflict pos [ T_Int None; ASTUtils.default_t_bits; T_Real ] ty
-
 let infer_value = function
   | V_Int i -> T_Int (Some [ Constraint_Exact (expr_of_int i) ])
   | V_Bool _ -> T_Bool
   | V_Real _ -> T_Real
   | V_BitVector bv -> Bitvector.length bv |> expr_of_int |> t_bits_bitwidth
   | _ -> not_yet_implemented ASTUtils.dummy_annotated "static complex values"
-
-let rec infer tenv lenv e =
-  match e.desc with
-  | E_Literal v -> infer_value v |> add_dummy_pos
-  | E_Var n -> lookup tenv lenv e n
-  | E_Typed (_e, t) -> get_structure tenv.globals t
-  | E_Binop (op, e1, e2) -> infer_op op e tenv lenv e1 e2
-  | E_Unop (unop, e') -> infer_unop unop e tenv lenv e'
-  | E_Call (name, args, eqs) -> (
-      match IMap.find_opt name tenv.funcs with
-      | None -> undefined_identifier e ("function " ^ name)
-      | Some (_, None) -> fatal_from e @@ Error.MismatchedReturnValue name
-      | Some (args_types, _return_type) ->
-          let () =
-            if List.compare_lengths args_types args != 0 then
-              fatal_from e
-              @@ Error.BadArity (name, List.length args_types, List.length args)
-          in
-          let eqs =
-            let folder acc (x, _) e = (x, e) :: acc in
-            List.fold_left2 folder eqs args_types args
-          in
-          lookup_return_type tenv e name |> rename_ty_eqs eqs)
-  | E_Slice ({ desc = E_Var name; _ }, _) when IMap.mem name tenv.funcs ->
-      lookup_return_type tenv e name
-  | E_Slice (e, slices) -> (
-      let ty = infer tenv lenv e in
-      match ty.desc with
-      | T_Bits _ | T_Int _ ->
-          slices_length slices |> t_bits_bitwidth |> add_dummy_pos
-      | _ -> conflict e [ ASTUtils.default_t_bits; T_Int None ] ty)
-  | E_Cond (_e1, e2, e3) -> (
-      let ty2 = infer tenv lenv e2 in
-      match ty2.desc with
-      | T_Int None -> T_Int None |> add_dummy_pos
-      | T_Int (Some c2) -> (
-          let ty3 = infer tenv lenv e3 in
-          match ty3.desc with
-          | T_Int (Some c3) -> T_Int (Some (c2 @ c3)) |> add_dummy_pos
-          | _ -> T_Int None |> add_dummy_pos)
-      | _ -> ty2)
-  | E_GetField (e, x, ta) -> (
-      match ta with
-      | TA_None -> infer tenv lenv e |> field_type e x
-      | TA_InferredStructure ty -> field_type e x ty)
-  | E_GetFields (e, xs, ta) -> (
-      match ta with
-      | TA_None -> infer tenv lenv e |> fields_type e xs
-      | TA_InferredStructure ty -> fields_type e xs ty)
-  | E_Record (ty, _, ta) -> (
-      match ta with
-      | TA_None -> get_structure tenv.globals ty
-      | TA_InferredStructure ty -> ty)
-  | E_Concat es ->
-      let get_length acc e =
-        let ty = infer tenv lenv e in
-        match ty.desc with
-        | T_Bits (BitWidth_Determined l, _) -> ASTUtils.binop PLUS acc l
-        | T_Bits _ -> not_yet_implemented e "bitvector length inference"
-        | _ -> conflict e [ ASTUtils.default_t_bits ] ty
-      in
-      List.fold_left get_length (expr_of_int 0) es
-      |> reduce_constants |> t_bits_bitwidth |> add_dummy_pos
-  | E_Tuple es -> T_Tuple (List.map (infer tenv lenv) es) |> add_dummy_pos
-  | E_Unknown ty -> get_structure tenv.globals ty
-  | E_Pattern _ -> T_Bool |> ASTUtils.add_pos_from e
-
-and infer_op op =
-  match op with
-  | AND | EOR | OR -> bitwise_op
-  | BAND | BEQ | BOR | IMPL | EQ_OP | NEQ | GT | GEQ | LT | LEQ -> bool_op
-  | DIV | MOD | SHL | SHR -> int_int_op
-  | MINUS | MUL | PLUS -> num_num_op
-  | RDIV -> real_op
-
-and bool_op _ _ _ _ _ = T_Bool |> add_dummy_pos
-and bitwise_op pos tenv lenv e1 _e2 = infer tenv lenv e1 |> check_bitvector pos
-and int_int_op pos tenv lenv e1 _e2 = infer tenv lenv e1 |> check_integer pos
-and num_num_op pos tenv lenv e1 _e2 = infer tenv lenv e1 |> check_num pos
-and real_op pos = not_yet_implemented pos "Real operations"
-
-and infer_unop op pos tenv lenv e =
-  match op with
-  | BNOT -> T_Bool |> add_dummy_pos
-  | NOT -> infer tenv lenv e |> check_bitvector pos
-  | NEG -> infer tenv lenv e |> check_integer pos
 
 let rec infer_lexpr tenv lenv le =
   match le.desc with
@@ -781,18 +682,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         in
         t
 
-  let rec annotate_expr_fallback tenv lenv e : expr =
-    let tr = try_annotate_expr tenv lenv in
-    add_pos_from e
-    @@
-    match e.desc with
-    | E_Literal _ | E_Typed _ | E_Var _ | E_Binop _ | E_Call _ | E_Unop _
-    | E_Cond _ | E_Tuple _ | E_Concat _ | E_Record _ | E_Unknown _ | E_Slice _
-    | E_GetField _ | E_GetFields _ ->
-        assert false
-    | E_Pattern (e', p) -> E_Pattern (tr e', p)
-
-  and try_annotate_expr tenv lenv e =
+  let rec try_annotate_expr tenv lenv e =
     best_effort (t_int, e) (fun (_, e) -> annotate_expr tenv lenv e) |> snd
 
   and annotate_slices tenv lenv =
@@ -835,6 +725,71 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
           Slice_Length (e1, e2)
     in
     List.map tr_one
+
+  and annotate_pattern loc tenv lenv t = function
+    | Pattern_All as p -> p
+    | Pattern_Any li ->
+        Pattern_Any (List.map (annotate_pattern loc tenv lenv t) li)
+    | Pattern_Not p -> Pattern_Not (annotate_pattern loc tenv lenv t p)
+    | Pattern_Single e ->
+        let t_e, e = annotate_expr tenv lenv e in
+        let+ () =
+         fun () ->
+          let t_struct = get_structure tenv.globals t
+          and t_e_struct = get_structure tenv.globals t_e in
+          match (t_struct.desc, t_e_struct.desc) with
+          | T_Bool, T_Bool | T_Real, T_Real -> ()
+          | T_Int _, T_Int _ -> ()
+          | T_Bits _, T_Bits _ ->
+              check_bv_have_same_determined_bitwidth' tenv t_struct t_e_struct
+                ()
+          (* TODO: Multiple discriminants can be matched at once by forming
+             a tuple of discriminants and a tuple used in the pattern_set.
+             Both tuples must have the same number of elements. A
+             successful pattern match occurs when each discriminant term
+             matches the respective term of the pattern tuple. *)
+          | T_Enum li1, T_Enum li2 when ASTUtils.list_equal String.equal li1 li2
+            ->
+              ()
+          | _ -> fatal_from loc (Error.BadTypesForBinop (EQ_OP, t, t_e))
+        in
+        Pattern_Single e
+    | Pattern_Geq e ->
+        (* TODO: check that e is statically evaluable. *)
+        let t_e, e = annotate_expr tenv lenv e in
+        let+ () =
+          both
+            (check_structure_integer loc tenv t)
+            (check_structure_integer loc tenv t_e)
+        in
+        Pattern_Geq e
+    | Pattern_Leq e ->
+        (* TODO: check that e is statically evaluable. *)
+        let t_e, e = annotate_expr tenv lenv e in
+        let+ () =
+          both
+            (check_structure_integer loc tenv t)
+            (check_structure_integer loc tenv t_e)
+        in
+        Pattern_Leq e
+    | Pattern_Range (e1, e2) ->
+        let t_e1, e1 = annotate_expr tenv lenv e1
+        and t_e2, e2 = annotate_expr tenv lenv e2 in
+        let+ () =
+          both
+            (check_structure_integer loc tenv t)
+            (both
+               (check_structure_integer loc tenv t_e1)
+               (check_structure_integer loc tenv t_e2))
+        in
+        Pattern_Range (e1, e2)
+    | Pattern_Mask _ as p ->
+        (* TODO. *)
+        let+ () =
+          fatal_from loc
+            (Error.NotYetImplemented "Typing masks in pattern matching.")
+        in
+        p
 
   and annotate_expr tenv lenv (e : expr) : ty * expr =
     let () = if false then Format.eprintf "@[Annotating %a@]@." PP.pp_expr e in
@@ -1084,10 +1039,38 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
           E_GetFields (e', fields, TA_InferredStructure t_e'_struct)
           |> add_pos_from e )
-    | _ ->
-        let e = annotate_expr_fallback tenv lenv e in
-        let t = best_effort t_bool (fun _ -> infer tenv lenv e) in
-        (t, e)
+    | E_Pattern (e', patterns) ->
+        (*
+         Rule ZNDL states that
+
+            The IN operator is equivalent to testing its first operand for
+            equality against each value in the (possibly infinite) set denoted
+            by the second operand, and taking the logical OR of the result.
+            Values denoted by a bitmask_lit comprise all bitvectors that could
+            match the bit-mask. It is not an error if any or all of the values
+            denoted by the first operand can be statically determined to never
+            compare equal with the second operand.
+
+          e IN pattern            is sugar for
+             "-"                      ->          TRUE
+           | e1=expr                  ->          e == e1
+           | bitmask_lit              ->          not yet implemented
+           | e1=expr ".." e2=expr     ->          e1 <= e && e <= e2
+           | "<=" e1=expr             ->          e <= e1
+           | ">=" e1=expr             ->          e >= e1
+           |  { p0 , ... pN }         ->          e IN p0 || ... e IN pN
+           | !{ p0 , ... pN }         ->          not (e IN p0) && ... e IN pN
+
+         We cannot reduce them here (as otherwise e might be evaluated a bad
+         number of times), but we will apply the same typing rules as for those
+         desugared expressions.
+         *)
+        let t_e', e' = annotate_expr tenv lenv e' in
+        let patterns =
+          best_effort patterns (annotate_pattern e tenv lenv t_e')
+        in
+        ( T_Bool |> ASTUtils.add_pos_from e,
+          E_Pattern (e', patterns) |> add_pos_from e )
 
   let rec annotate_lexpr_fallback tenv lenv le =
     add_pos_from le
