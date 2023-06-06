@@ -788,19 +788,8 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     match e.desc with
     | E_Literal _ | E_Typed _ | E_Var _ | E_Binop _ | E_Call _ | E_Unop _
     | E_Cond _ | E_Tuple _ | E_Concat _ | E_Record _ | E_Unknown _ | E_Slice _
-      ->
+    | E_GetField _ | E_GetFields _ ->
         assert false
-    | E_GetField (e', field, _ta) -> (
-        let e' = tr e' in
-        let ty = infer tenv lenv e' in
-        match ty.desc with
-        | T_Bits _ -> E_GetFields (e', [ field ], TA_InferredStructure ty)
-        | T_Record _ -> E_GetField (e', field, TA_InferredStructure ty)
-        | _ -> conflict e [ ASTUtils.default_t_bits; T_Record [] ] ty)
-    | E_GetFields (e, fields, _ta) ->
-        let e = tr e in
-        let ty = infer tenv lenv e in
-        E_GetFields (e, fields, TA_InferredStructure ty)
     | E_Pattern (e', p) -> E_Pattern (tr e', p)
 
   and try_annotate_expr tenv lenv e =
@@ -1045,6 +1034,56 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
             let slices = best_effort slices (annotate_slices tenv lenv) in
             ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
               E_Slice (e', slices) |> add_pos_from e ))
+    | E_GetField (e', field, _ta) -> (
+        let t_e', e' = annotate_expr tenv lenv e' in
+        let t_e'_struct = get_structure tenv.globals t_e' in
+        match t_e'_struct.desc with
+        | T_Record fields -> (
+            match List.assoc_opt field fields with
+            | None -> fatal_from e (Error.BadField (field, t_e'_struct))
+            | Some t ->
+                ( t,
+                  E_GetField (e', field, TA_InferredStructure t_e'_struct)
+                  |> add_pos_from e ))
+        | T_Bits (_, bitfields) -> (
+            match List.assoc_opt field bitfields with
+            | None -> fatal_from e (Error.BadField (field, t_e'_struct))
+            | Some slice ->
+                let w = slices_length slice in
+                (* I think rules KTBG and WZCS (see annotate_slices) do not
+                   need to be checked here, but at type declaration. *)
+                (* TODO: check that:
+                   - Rule SNQJ: An expression or subexpression which may result in
+                     a zero-length bitvector must not be side-effecting.
+                *)
+                ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
+                  E_GetFields (e', [ field ], TA_InferredStructure t_e'_struct)
+                  |> add_pos_from e ))
+        | _ -> conflict e [ ASTUtils.default_t_bits; T_Record [] ] t_e')
+    | E_GetFields (e', fields, _ta) ->
+        let t_e', e' = annotate_expr tenv lenv e' in
+        let t_e'_struct = get_structure tenv.globals t_e' in
+        let bitfields =
+          match t_e'_struct.desc with
+          | T_Bits (_, bitfields) -> bitfields
+          | _ -> conflict e [ ASTUtils.default_t_bits ] t_e'
+        in
+        let one_field field =
+          match List.assoc_opt field bitfields with
+          | None -> fatal_from e (Error.BadField (field, t_e'_struct))
+          | Some slices ->
+              (* I think rules KTBG and WZCS (see annotate_slices) do not
+                 need to be checked here, but at type declaration. *)
+              slices_length slices
+        in
+        let w = List.map one_field fields |> sum |> reduce_constants in
+        (* TODO: check that:
+           - Rule SNQJ: An expression or subexpression which may result in a
+             zero-length bitvector must not be side-effecting.
+        *)
+        ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
+          E_GetFields (e', fields, TA_InferredStructure t_e'_struct)
+          |> add_pos_from e )
     | _ ->
         let e = annotate_expr_fallback tenv lenv e in
         let t = best_effort t_bool (fun _ -> infer tenv lenv e) in
