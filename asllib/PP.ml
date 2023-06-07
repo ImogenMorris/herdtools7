@@ -199,6 +199,26 @@ let rec pp_lexpr f le =
   | LE_Ignore -> pp_print_string f "-"
   | LE_TupleUnpack les -> fprintf f "@[( %a )@]" (pp_comma_list pp_lexpr) les
 
+let pp_local_decl_keyword f k =
+  pp_print_string f
+    (match k with
+    | LDK_Var -> "var"
+    | LDK_Constant -> "constant"
+    | LDK_Let -> "let")
+
+let rec pp_local_decl_item f =
+  let pp_ty_opt f = function
+    | Some ty -> fprintf f "@ :: @[%a@]" pp_ty ty
+    | None -> ()
+  in
+  function
+  | LDI_Ignore ty_opt -> fprintf f "@[-%a@]" pp_ty_opt ty_opt
+  | LDI_Var (s, ty_opt) -> fprintf f "@[%s%a@]" s pp_ty_opt ty_opt
+  | LDI_Tuple (ldis, ty_opt) ->
+      fprintf f "@[(%a)%a@]"
+        (pp_comma_list pp_local_decl_item)
+        ldis pp_ty_opt ty_opt
+
 let rec pp_stmt f s =
   match s.desc with
   | S_Pass -> pp_print_string f "pass;"
@@ -233,7 +253,11 @@ let rec pp_stmt f s =
         (pp_print_list ~pp_sep:pp_print_space pp_case_alt)
         case_li
   | S_Assert e -> fprintf f "@[<2>assert@ %a;@]" pp_expr e
-  | S_TypeDecl (x, t) -> fprintf f "@[<2>var %s :: %a;@]" x pp_ty t
+  | S_Decl (ldk, ldi, None) ->
+      fprintf f "@[<2>%a %a;@]" pp_local_decl_keyword ldk pp_local_decl_item ldi
+  | S_Decl (ldk, ldi, Some e) ->
+      fprintf f "@[<2>%a %a@ = %a;@]" pp_local_decl_keyword ldk
+        pp_local_decl_item ldi pp_expr e
 
 let pp_decl f =
   let pp_func_sig f { name; args; return_type; _ } =

@@ -38,6 +38,10 @@ val literal : value -> expr
 val var_ : identifier -> expr
 val binop : binop -> expr -> expr -> expr
 val list_equal : ('a -> 'a -> bool) -> 'a list -> 'a list -> bool
+
+val list_fold_left_map :
+  ('acc -> 'a -> 'acc * 'b) -> 'acc -> 'a list -> 'acc * 'b list
+
 val expr_equal : expr -> expr -> bool
 val value_equal : value -> value -> bool
 val slice_equal : slice -> slice -> bool

@@ -188,11 +188,18 @@ type lexpr_desc =
 
 and lexpr = lexpr_desc annotated
 
+type local_decl_keyword = LDK_Var | LDK_Constant | LDK_Let
+
+type local_decl_item =
+  | LDI_Var of identifier * ty option
+  | LDI_Ignore of ty option
+  | LDI_Tuple of local_decl_item list * ty option
+
 (** Statements. Parametric on the type of literals in expressions. *)
 type stmt_desc =
   | S_Pass
   | S_Then of stmt * stmt
-  | S_TypeDecl of identifier * ty
+  | S_Decl of local_decl_keyword * local_decl_item * expr option
   | S_Assign of lexpr * expr
   | S_Call of identifier * expr list * (identifier * expr) list
   | S_Return of expr option

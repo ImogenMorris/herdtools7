@@ -199,6 +199,22 @@ let rec pp_lexpr =
   in
   fun f le -> pp_annotated pp_desc f le
 
+let pp_local_decl_keyboard f k =
+  pp_string f
+    (match k with
+    | LDK_Var -> "LDK_Var"
+    | LDK_Constant -> "LDK_Constant"
+    | LDK_Let -> "LDK_Let")
+
+let rec pp_local_decl_item f = function
+  | LDI_Ignore ty_opt -> bprintf f "LDI_Ignore (%a)" (pp_option pp_ty) ty_opt
+  | LDI_Var (s, ty_opt) ->
+      bprintf f "LDI_Var (%S, %a)" s (pp_option pp_ty) ty_opt
+  | LDI_Tuple (ldis, ty_opt) ->
+      bprintf f "LDI_Tuple (%a, %a)"
+        (pp_list pp_local_decl_item)
+        ldis (pp_option pp_ty) ty_opt
+
 let rec pp_stmt =
   let pp_desc f = function
     | S_Pass -> addb f "SPass"
@@ -215,7 +231,9 @@ let rec pp_stmt =
           (pp_list (pp_annotated (pp_pair pp_pattern pp_stmt)))
           cases
     | S_Assert e -> bprintf f "S_Assert (%a)" pp_expr e
-    | S_TypeDecl (x, t) -> bprintf f "S_TypeDecl (%S, %a)" x pp_ty t
+    | S_Decl (ldk, ldi, e_opt) ->
+        bprintf f "S_Decl (%a, %a, %a)" pp_local_decl_keyboard ldk
+          pp_local_decl_item ldi (pp_option pp_expr) e_opt
   in
   fun f s -> pp_annotated pp_desc f s
 

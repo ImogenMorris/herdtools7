@@ -1,6 +1,5 @@
 open AST
-module IMap = ASTUtils.IMap
-module ISet = ASTUtils.ISet
+open ASTUtils
 
 let fatal_from = Error.fatal_from
 let not_yet_implemented pos s = fatal_from pos (Error.NotYetImplemented s)
@@ -9,9 +8,6 @@ let bad_field pos x ty = fatal_from pos (Error.BadField (x, ty))
 
 let conflict pos expected provided =
   fatal_from pos (Error.ConflictingTypes (expected, provided))
-
-let add_dummy_pos = ASTUtils.add_dummy_pos
-let add_pos_from = ASTUtils.add_pos_from_st
 
 (* Control Warning outputs. *)
 let _warn = false
@@ -120,9 +116,7 @@ let rec subtypes tenv t1 t2 =
             | Some eqs -> on_fields (List.rev_append eqs acc) h1 h2)
         | _ -> assert false
       in
-      on_fields []
-        (ASTUtils.canonical_fields li1)
-        (ASTUtils.canonical_fields li2)
+      on_fields [] (canonical_fields li1) (canonical_fields li2)
   | T_Named x, T_Named y when String.compare x y = 0 -> Some []
   | T_Named _, _ | _, T_Named _ ->
       subtypes tenv
@@ -254,8 +248,8 @@ end
 (*                                                                            *)
 (******************************************************************************)
 
-let expr_of_int i = ASTUtils.literal (V_Int i)
-let plus = ASTUtils.binop PLUS
+let expr_of_int i = literal (V_Int i)
+let plus = binop PLUS
 let t_bits_bitwidth e = T_Bits (BitWidth_Determined e, [])
 
 let reduce_constants =
@@ -265,7 +259,7 @@ let reduce_constants =
   fun e ->
     try
       let v = StaticInterpreter.static_eval lookup e in
-      E_Literal v |> add_pos_from e
+      E_Literal v |> add_pos_from_st e
     with TrivialReductionFailed -> e
 
 let sum = function
@@ -289,13 +283,11 @@ let width_plus acc w =
   | BitWidth_Determined e1, BitWidth_Determined e2 ->
       BitWidth_Determined (plus e1 e2 |> reduce_constants)
   | BitWidth_Constrained cs1, BitWidth_Determined e2 ->
-      BitWidth_Constrained
-        (ASTUtils.constraint_binop PLUS cs1 [ Constraint_Exact e2 ])
+      BitWidth_Constrained (constraint_binop PLUS cs1 [ Constraint_Exact e2 ])
   | BitWidth_Determined e1, BitWidth_Constrained cs2 ->
-      BitWidth_Constrained
-        (ASTUtils.constraint_binop PLUS [ Constraint_Exact e1 ] cs2)
+      BitWidth_Constrained (constraint_binop PLUS [ Constraint_Exact e1 ] cs2)
   | BitWidth_Constrained cs1, BitWidth_Constrained cs2 ->
-      BitWidth_Constrained (ASTUtils.constraint_binop PLUS cs1 cs2)
+      BitWidth_Constrained (constraint_binop PLUS cs1 cs2)
   | _ ->
       failwith "Not yet implemented: concatening slices constrained from type."
 
@@ -308,7 +300,7 @@ let field_type pos x ty =
   | T_Bits (_, fields) -> (
       match List.assoc_opt x fields with
       | Some slices ->
-          slices_length slices |> t_bits_bitwidth |> add_pos_from ty
+          slices_length slices |> t_bits_bitwidth |> add_pos_from_st ty
       | None -> bad_field pos x ty)
   | _ -> bad_field pos x ty
 
@@ -320,17 +312,17 @@ let fields_type pos xs ty =
           match List.assoc_opt x fields with
           | None -> bad_field pos x ty
           | Some slices -> slices_length slices)
-    | _ -> conflict pos [ ASTUtils.default_t_bits ] ty
+    | _ -> conflict pos [ default_t_bits ] ty
   in
-  List.map field_length xs |> sum |> t_bits_bitwidth |> add_pos_from ty
+  List.map field_length xs |> sum |> t_bits_bitwidth |> add_pos_from_st ty
 
 let rename_ty_eqs (eqs : (AST.identifier * AST.expr) list) ty =
   let mapping = IMap.of_list eqs in
   match ty.desc with
   | T_Bits (BitWidth_Determined ({ desc = E_Var callee_var; _ } as e), fields)
     when IMap.mem callee_var mapping ->
-      let new_e = IMap.find callee_var mapping |> ASTUtils.with_pos_from e in
-      T_Bits (BitWidth_Determined new_e, fields) |> add_pos_from ty
+      let new_e = IMap.find callee_var mapping |> with_pos_from e in
+      T_Bits (BitWidth_Determined new_e, fields) |> add_pos_from_st ty
   | _ -> ty
 
 (******************************************************************************)
@@ -344,7 +336,7 @@ let infer_value = function
   | V_Bool _ -> T_Bool
   | V_Real _ -> T_Real
   | V_BitVector bv -> Bitvector.length bv |> expr_of_int |> t_bits_bitwidth
-  | _ -> not_yet_implemented ASTUtils.dummy_annotated "static complex values"
+  | _ -> not_yet_implemented dummy_annotated "static complex values"
 
 let rec infer_lexpr tenv lenv le =
   match le.desc with
@@ -356,7 +348,7 @@ let rec infer_lexpr tenv lenv le =
       let ty = infer_lexpr tenv lenv le' in
       match ty.desc with
       | T_Bits _ -> slices_length slices |> t_bits_bitwidth |> add_dummy_pos
-      | _ -> conflict le [ ASTUtils.default_t_bits ] ty)
+      | _ -> conflict le [ default_t_bits ] ty)
   | LE_SetField (_, field, TA_InferredStructure ty) -> field_type le field ty
   | LE_SetFields (_, fields, TA_InferredStructure ty) ->
       fields_type le fields ty
@@ -381,15 +373,14 @@ let should_reduce_to_call tenv name args =
 
 let should_slices_reduce_to_call tenv name slices =
   let args =
-    try Some (List.map ASTUtils.slice_as_single slices)
-    with Invalid_argument _ -> None
+    try Some (List.map slice_as_single slices) with Invalid_argument _ -> None
   in
   match args with
   | None -> None
   | Some args -> should_reduce_to_call tenv name args
 
 let getter_should_reduce_to_call tenv x slices =
-  let name = ASTUtils.getter_name x in
+  let name = getter_name x in
   match should_slices_reduce_to_call tenv name slices with
   | Some (name, args, Some _) ->
       let () =
@@ -399,14 +390,14 @@ let getter_should_reduce_to_call tenv x slices =
   | Some (_, _, None) | None -> None
 
 let rec setter_should_reduce_to_call_s tenv le e : stmt option =
-  let here d = ASTUtils.add_pos_from le d in
-  let s_then = ASTUtils.s_then in
+  let here d = add_pos_from le d in
+  let s_then = s_then in
   let rec_desc le' e_desc =
-    ASTUtils.add_pos_from le e_desc |> setter_should_reduce_to_call_s tenv le'
+    add_pos_from le e_desc |> setter_should_reduce_to_call_s tenv le'
   in
-  let to_expr = ASTUtils.expr_of_lexpr in
+  let to_expr = expr_of_lexpr in
   let with_temp old_le sub_le =
-    let x = ASTUtils.fresh_var "setter_setfield" in
+    let x = fresh_var "setter_setfield" in
     let le_x = LE_Var x |> here in
     match setter_should_reduce_to_call_s tenv sub_le (E_Var x |> here) with
     | None -> None
@@ -427,7 +418,7 @@ let rec setter_should_reduce_to_call_s tenv le e : stmt option =
       let old_le le' = LE_SetFields (le', fields, ta) |> here in
       with_temp old_le sub_le
   | LE_Slice ({ desc = LE_Var x; _ }, slices) -> (
-      let name = ASTUtils.setter_name x and slices = Slice_Single e :: slices in
+      let name = setter_name x and slices = Slice_Single e :: slices in
       match should_slices_reduce_to_call tenv name slices with
       | None -> None
       | Some (name, args, _) -> Some (S_Call (name, args, []) |> here))
@@ -437,7 +428,7 @@ let rec setter_should_reduce_to_call_s tenv le e : stmt option =
   | LE_TupleUnpack _ -> None
   | LE_Typed (le', ty) -> E_Typed (e, ty) |> rec_desc le'
   | LE_Var x -> (
-      match should_reduce_to_call tenv (ASTUtils.setter_name x) [ e ] with
+      match should_reduce_to_call tenv (setter_name x) [ e ] with
       | Some (name, args, _) -> Some (S_Call (name, args, []) |> here)
       | None -> None)
 
@@ -513,7 +504,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
 
   let get_bitvector_width loc tenv t =
     try get_bitvector_width' tenv t
-    with TypingAssumptionFailed -> conflict loc [ ASTUtils.default_t_bits ] t
+    with TypingAssumptionFailed -> conflict loc [ default_t_bits ] t
 
   let get_record_fields loc tenv t =
     match (get_structure tenv.globals t).desc with
@@ -534,7 +525,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
   let check_structure_bits loc tenv t () =
     match (get_structure tenv.globals t).desc with
     | T_Bits _ -> ()
-    | _ -> conflict loc [ ASTUtils.default_t_bits ] t
+    | _ -> conflict loc [ default_t_bits ] t
 
   let check_structure_integer loc tenv t () =
     match (get_structure tenv.globals t).desc with
@@ -543,12 +534,12 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
 
   let check_bv_have_same_determined_bitwidth' tenv t1 t2 () =
     let n = get_bitvector_width' tenv t1 and m = get_bitvector_width' tenv t2 in
-    if ASTUtils.bitwidth_equal n m then ()
+    if bitwidth_equal n m then ()
     else
       match (n, m) with
       | BitWidth_Determined e_n, BitWidth_Determined e_m ->
           let v_n = eval' tenv e_n and v_m = eval' tenv e_m in
-          check_true' (ASTUtils.value_equal v_n v_m) ()
+          check_true' (value_equal v_n v_m) ()
       | _ -> assumption_failed ()
 
   let has_bitvector_structure tenv t =
@@ -565,7 +556,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         Format.eprintf "Checking binop %s between %a and %a@."
           (PP.binop_to_string op) PP.pp_ty t1 PP.pp_ty t2
     in
-    let with_loc = ASTUtils.add_pos_from loc in
+    let with_loc = add_pos_from loc in
     either
       (fun () ->
         match op with
@@ -601,7 +592,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
               any
                 [
                   (* Optimisation. *)
-                  check_true' (ASTUtils.type_equal t1 t2);
+                  check_true' (type_equal t1 t2);
                   (* If an argument of a comparison operation is a constrained
                      integer then it is treated as an unconstrained integer. *)
                   both
@@ -618,9 +609,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                   (fun () ->
                     match (t1.desc, t2.desc) with
                     | T_Enum li1, T_Enum li2 ->
-                        check_true'
-                          (ASTUtils.list_equal String.equal li1 li2)
-                          ()
+                        check_true' (list_equal String.equal li1 li2) ()
                     | _ -> assumption_failed ());
                 ]
             in
@@ -657,7 +646,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                 (* TODO: check for division by zero? cf I YHRP: The calculation
                    of constraints shall cause an error if necessary, for
                    example where a division by zero occurs, etc. *)
-                T_Int (Some (ASTUtils.constraint_binop op cs1 cs2)) |> with_loc
+                T_Int (Some (constraint_binop op cs1 cs2)) |> with_loc
             | _ -> assumption_failed ())
         | RDIV ->
             let+ () = check_type_satisfies' tenv t1 (T_Real |> add_dummy_pos) in
@@ -669,16 +658,15 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     match op with
     | BNOT ->
         let+ () = check_type_satisfies loc tenv t t_bool in
-        T_Bool |> ASTUtils.add_pos_from loc
+        T_Bool |> add_pos_from loc
     | NEG ->
         let+ () = check_type_satisfies loc tenv t t_int in
         (* TODO: work on constraints. *)
-        T_Int None |> ASTUtils.add_pos_from loc
+        T_Int None |> add_pos_from loc
     | NOT ->
         (* TODO: make sure that default_t_bits is type-satisfied by all [bits( * )] types *)
         let+ () =
-          check_type_satisfies loc tenv t
-            (ASTUtils.default_t_bits |> add_dummy_pos)
+          check_type_satisfies loc tenv t (default_t_bits |> add_dummy_pos)
         in
         t
 
@@ -748,9 +736,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
              Both tuples must have the same number of elements. A
              successful pattern match occurs when each discriminant term
              matches the respective term of the pattern tuple. *)
-          | T_Enum li1, T_Enum li2 when ASTUtils.list_equal String.equal li1 li2
-            ->
-              ()
+          | T_Enum li1, T_Enum li2 when list_equal String.equal li1 li2 -> ()
           | _ -> fatal_from loc (Error.BadTypesForBinop (EQ_OP, t, t_e))
         in
         Pattern_Single e
@@ -794,7 +780,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
   and annotate_expr tenv lenv (e : expr) : ty * expr =
     let () = if false then Format.eprintf "@[Annotating %a@]@." PP.pp_expr e in
     match e.desc with
-    | E_Literal v -> (infer_value v |> ASTUtils.add_pos_from e, e)
+    | E_Literal v -> (infer_value v |> add_pos_from e, e)
     | E_Typed (e', t) ->
         let t = get_structure tenv.globals t in
         let t_e, e'' = annotate_expr tenv lenv e' in
@@ -806,7 +792,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
              evaluates to a value in the domain of the required type is
              required. *)
         best_effort
-          (t, E_Typed (e'', t) |> add_pos_from e)
+          (t, E_Typed (e'', t) |> add_pos_from_st e)
           (fun res ->
             let tenv' = (tenv.globals, IMap.empty) in
             if Types.structural_subtype_satisfies tenv' t_e t then
@@ -821,7 +807,8 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
               if false then
                 Format.eprintf "@[Reducing getter %S@ at %a@]@." x PP.pp_pos e
             in
-            E_Call (name, args, []) |> add_pos_from e |> annotate_expr tenv lenv
+            E_Call (name, args, [])
+            |> add_pos_from_st e |> annotate_expr tenv lenv
         | None ->
             let () =
               if false then
@@ -830,20 +817,20 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
             in
             (lookup tenv lenv e x, e))
     | E_Binop (BAND, e1, e2) ->
-        E_Cond (e1, e2, E_Literal (V_Bool false) |> add_pos_from e)
-        |> add_pos_from e |> annotate_expr tenv lenv
+        E_Cond (e1, e2, E_Literal (V_Bool false) |> add_pos_from_st e)
+        |> add_pos_from_st e |> annotate_expr tenv lenv
     | E_Binop (BOR, e1, e2) ->
-        E_Cond (e1, E_Literal (V_Bool true) |> add_pos_from e, e2)
-        |> add_pos_from e |> annotate_expr tenv lenv
+        E_Cond (e1, E_Literal (V_Bool true) |> add_pos_from_st e, e2)
+        |> add_pos_from_st e |> annotate_expr tenv lenv
     | E_Binop (op, e1, e2) ->
         let t1, e1' = annotate_expr tenv lenv e1 in
         let t2, e2' = annotate_expr tenv lenv e2 in
         let t = check_binop e tenv op t1 t2 in
-        (t, E_Binop (op, e1', e2') |> add_pos_from e)
+        (t, E_Binop (op, e1', e2') |> add_pos_from_st e)
     | E_Unop (op, e') ->
         let t'', e'' = annotate_expr tenv lenv e' in
         let t = check_unop e tenv op t'' in
-        (t, E_Unop (op, e'') |> add_pos_from e)
+        (t, E_Unop (op, e'') |> add_pos_from_st e)
     | E_Call (name, args, eqs) ->
         let caller_arg_types, args =
           List.map (annotate_expr tenv lenv) args |> List.split
@@ -886,7 +873,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
               (name, eqs))
         in
         ( lookup_return_type tenv e name |> rename_ty_eqs eqs,
-          E_Call (name, args, eqs) |> add_pos_from e )
+          E_Call (name, args, eqs) |> add_pos_from_st e )
     | E_Cond (e_cond, e_true, e_false) ->
         let t_cond, e_cond = annotate_expr tenv lenv e_cond in
         let+ () = check_structure_boolean e tenv t_cond in
@@ -903,14 +890,12 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                     (Error.NotYetImplemented "Cannot reconcile the two types.")
               | Some t -> t)
         in
-        (t, E_Cond (e_cond, e_true, e_false) |> add_pos_from e)
+        (t, E_Cond (e_cond, e_true, e_false) |> add_pos_from_st e)
     | E_Tuple li ->
         let ts, es = List.map (annotate_expr tenv lenv) li |> List.split in
-        (T_Tuple ts |> ASTUtils.add_pos_from e, E_Tuple es |> add_pos_from e)
+        (T_Tuple ts |> add_pos_from e, E_Tuple es |> add_pos_from_st e)
     | E_Concat [] ->
-        ( T_Bits (BitWidth_Determined (expr_of_int 0), [])
-          |> ASTUtils.add_pos_from e,
-          e )
+        (T_Bits (BitWidth_Determined (expr_of_int 0), []) |> add_pos_from e, e)
     | E_Concat (_ :: _ as li) ->
         let ts, es = List.map (annotate_expr tenv lenv) li |> List.split in
         let w =
@@ -919,8 +904,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
               let wh = List.hd widths and wts = List.tl widths in
               List.fold_left width_plus wh wts)
         in
-        ( T_Bits (w, []) |> ASTUtils.add_pos_from e,
-          E_Concat es |> add_pos_from e )
+        (T_Bits (w, []) |> add_pos_from e, E_Concat es |> add_pos_from_st e)
     | E_Record (t, fields, _ta) ->
         (* Rule WBCQ: The identifier in a record expression must be a named type
            with the structure of a record type, and whose fields have the values
@@ -960,11 +944,11 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                 fields)
         in
         ( t_struct,
-          E_Record (t, fields, TA_InferredStructure t_struct) |> add_pos_from e
-        )
+          E_Record (t, fields, TA_InferredStructure t_struct)
+          |> add_pos_from_st e )
     | E_Unknown t ->
         let t = get_structure tenv.globals t in
-        (t, E_Unknown t |> add_pos_from e)
+        (t, E_Unknown t |> add_pos_from_st e)
     | E_Slice (e', slices) -> (
         let reduced =
           match e'.desc with
@@ -973,7 +957,8 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         in
         match reduced with
         | Some (name, args) ->
-            E_Call (name, args, []) |> add_pos_from e |> annotate_expr tenv lenv
+            E_Call (name, args, [])
+            |> add_pos_from_st e |> annotate_expr tenv lenv
         | None ->
             let t_e', e' = annotate_expr tenv lenv e' in
             let+ () =
@@ -987,8 +972,8 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                  a zero-length bitvector must not be side-effecting.
             *)
             let slices = best_effort slices (annotate_slices tenv lenv) in
-            ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
-              E_Slice (e', slices) |> add_pos_from e ))
+            ( T_Bits (BitWidth_Determined w, []) |> add_pos_from e,
+              E_Slice (e', slices) |> add_pos_from_st e ))
     | E_GetField (e', field, _ta) -> (
         let t_e', e' = annotate_expr tenv lenv e' in
         let t_e'_struct = get_structure tenv.globals t_e' in
@@ -999,7 +984,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
             | Some t ->
                 ( t,
                   E_GetField (e', field, TA_InferredStructure t_e'_struct)
-                  |> add_pos_from e ))
+                  |> add_pos_from_st e ))
         | T_Bits (_, bitfields) -> (
             match List.assoc_opt field bitfields with
             | None -> fatal_from e (Error.BadField (field, t_e'_struct))
@@ -1011,17 +996,17 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                    - Rule SNQJ: An expression or subexpression which may result in
                      a zero-length bitvector must not be side-effecting.
                 *)
-                ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
+                ( T_Bits (BitWidth_Determined w, []) |> add_pos_from e,
                   E_GetFields (e', [ field ], TA_InferredStructure t_e'_struct)
-                  |> add_pos_from e ))
-        | _ -> conflict e [ ASTUtils.default_t_bits; T_Record [] ] t_e')
+                  |> add_pos_from_st e ))
+        | _ -> conflict e [ default_t_bits; T_Record [] ] t_e')
     | E_GetFields (e', fields, _ta) ->
         let t_e', e' = annotate_expr tenv lenv e' in
         let t_e'_struct = get_structure tenv.globals t_e' in
         let bitfields =
           match t_e'_struct.desc with
           | T_Bits (_, bitfields) -> bitfields
-          | _ -> conflict e [ ASTUtils.default_t_bits ] t_e'
+          | _ -> conflict e [ default_t_bits ] t_e'
         in
         let one_field field =
           match List.assoc_opt field bitfields with
@@ -1036,9 +1021,9 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
            - Rule SNQJ: An expression or subexpression which may result in a
              zero-length bitvector must not be side-effecting.
         *)
-        ( T_Bits (BitWidth_Determined w, []) |> ASTUtils.add_pos_from e,
+        ( T_Bits (BitWidth_Determined w, []) |> add_pos_from e,
           E_GetFields (e', fields, TA_InferredStructure t_e'_struct)
-          |> add_pos_from e )
+          |> add_pos_from_st e )
     | E_Pattern (e', patterns) ->
         (*
          Rule ZNDL states that
@@ -1069,11 +1054,10 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         let patterns =
           best_effort patterns (annotate_pattern e tenv lenv t_e')
         in
-        ( T_Bool |> ASTUtils.add_pos_from e,
-          E_Pattern (e', patterns) |> add_pos_from e )
+        (T_Bool |> add_pos_from e, E_Pattern (e', patterns) |> add_pos_from_st e)
 
   let rec annotate_lexpr_fallback tenv lenv le =
-    add_pos_from le
+    add_pos_from_st le
     @@
     match le.desc with
     | LE_Var _ -> le.desc
@@ -1127,19 +1111,139 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                 (lenv, sub_le' :: sub_les)
               in
               let lenv, les' = List.fold_left2 folder (lenv, []) les sub_tys in
-              (lenv, LE_TupleUnpack (List.rev les') |> add_pos_from le)
+              (lenv, LE_TupleUnpack (List.rev les') |> add_pos_from_st le)
         | _ -> conflict le [ T_Tuple [] ] t_e)
     | _ -> (lenv, annotate_lexpr_fallback tenv lenv le)
+
+  let can_be_initialized_with tenv s t =
+    (* Rules:
+       - ZCVD: It is illegal for a storage element whose type has the
+         structure of the under-constrained integer to be initialized with a
+         value whose type has the structure of the under-constrained integer,
+         unless the type is omitted from the declaration (and therefore the
+         type can be unambiguously inferred) or the initialization expression
+         is omitted (and therefore the type is not omitted from the
+         declaration).
+       - LXQZ: A storage element of type S, where S is any type that does not have the
+         structure of the under-constrained integer type, may only be
+         assigned or initialized with a value of type T if T type-satisfies
+         S)
+    *)
+    let s_struct = get_structure tenv.globals s in
+    match s_struct.desc with
+    | T_Int (Some _) -> assert false
+    | _ -> Types.type_satisfies (tenv.globals, IMap.empty) t s
+
+  let check_var_not_in_env loc tenv lenv x () =
+    if IMap.mem x tenv.globals || IMap.mem x lenv || IMap.mem x tenv.funcs then
+      fatal_from loc (Error.NotYetImplemented "Typing error: ")
+    else ()
+
+  let rec annotate_local_decl_item loc tenv lenv ty ldi =
+    match ldi with
+    | LDI_Ignore None -> (lenv, LE_Ignore |> add_pos_from loc)
+    | LDI_Ignore (Some t) ->
+        let+ () =
+         fun () ->
+          if can_be_initialized_with tenv t ty then ()
+          else
+            fatal_from loc
+              (Error.NotYetImplemented
+                 "typing error: cannot assign to a type that does not \
+                  type-satisfies.")
+        in
+        (lenv, LE_Ignore |> add_pos_from loc)
+    | LDI_Var (x, ty_opt) ->
+        let t =
+          best_effort ty (fun _ ->
+              match ty_opt with
+              | Some t ->
+                  if can_be_initialized_with tenv t ty then t
+                  else
+                    fatal_from loc
+                      (Error.NotYetImplemented
+                         "typing error: cannot assign to a type that does not \
+                          type-satisfies.")
+              | _ -> ty)
+        in
+        let+ () =
+          (* Rule LCFD: A local declaration shall not declare an identifier
+             which is already in scope at the point of declaration. *)
+          check_var_not_in_env loc tenv lenv x
+        in
+        let lenv = IMap.add x t lenv in
+        (lenv, LE_Var x |> add_pos_from loc)
+    | LDI_Tuple ([ ldi ], None) -> annotate_local_decl_item loc tenv lenv ty ldi
+    | LDI_Tuple (ldis, None) ->
+        let tys =
+          match (get_structure tenv.globals ty).desc with
+          | T_Tuple tys when List.compare_lengths tys ldis = 0 -> tys
+          | T_Tuple tys ->
+              fatal_from loc
+                (Error.BadArity
+                   ("tuple initialization", List.length tys, List.length ldis))
+          | _ ->
+              fatal_from loc
+                (Error.NotYetImplemented
+                   Format.(
+                     asprintf
+                       "Type Error: cannot unpack a value of type %a into a \
+                        tuple of length."
+                       PP.pp_ty ty))
+        in
+        let lenv, les =
+          List.fold_left2
+            (fun (lenv', les) ty' ldi' ->
+              let lenv', le =
+                annotate_local_decl_item loc tenv lenv' ty' ldi'
+              in
+              (lenv', le :: les))
+            (lenv, []) tys ldis
+        in
+        (lenv, LE_TupleUnpack (List.rev les) |> add_pos_from loc)
+    | LDI_Tuple (_ldis, Some _t) ->
+        (* TODO: I don't know what to do in that case, for me the LRM is ambiguous in this case. *)
+        assert false
+
+  let rec annotate_local_decl_item_uninit loc tenv lenv ldi =
+    match ldi with
+    | LDI_Ignore _ -> (lenv, S_Pass |> add_pos_from_st loc)
+    | LDI_Var (_, None) ->
+        fatal_from loc
+          (Error.NotYetImplemented "Variable declaration needs a type.")
+    | LDI_Var (x, Some t) ->
+        let+ () = check_var_not_in_env loc tenv lenv x in
+        ( IMap.add x t lenv,
+          S_Assign (LE_Var x |> add_pos_from loc, E_Unknown t |> add_pos_from t)
+          |> add_pos_from loc )
+    | LDI_Tuple (ldis, None) ->
+        let lenv, ss =
+          list_fold_left_map
+            (annotate_local_decl_item_uninit loc tenv)
+            lenv ldis
+        in
+        (lenv, stmt_from_list ss)
+    | LDI_Tuple (ldis, Some t) ->
+        let lenv, les =
+          list_fold_left_map
+            (fun lenv' -> annotate_local_decl_item loc tenv lenv' t)
+            lenv ldis
+        in
+        let e = E_Unknown t |> add_pos_from t in
+        let ss =
+          List.map (fun le -> S_Assign (le, e) |> add_pos_from loc) les
+        in
+        (lenv, stmt_from_list ss)
 
   let rec annotate_stmt tenv lenv s =
     let () =
       if false then Format.eprintf "@[<3>Annotating@ @[%a@]@]@." PP.pp_stmt s
     in
     let tr_desc d =
-      add_pos_from s d |> annotate_stmt tenv lenv |> fun ({ desc; _ }, lenv) ->
-      (desc, lenv)
+      add_pos_from_st s d |> annotate_stmt tenv lenv
+      |> fun ({ desc; _ }, lenv) -> (desc, lenv)
     in
-    let add_pos (desc, lenv) = (add_pos_from s desc, lenv) in
+    let add_pos (desc, lenv) = (add_pos_from_st s desc, lenv) in
     add_pos
     @@
     match s.desc with
@@ -1182,7 +1286,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         let annotate_case (acc, lenv) case =
           let p, s = case.desc in
           let s, lenv = try_annotate_stmt tenv lenv s in
-          (add_pos_from case (p, s) :: acc, lenv)
+          (add_pos_from_st case (p, s) :: acc, lenv)
         in
         let cases, lenv = List.fold_left annotate_case ([], lenv) cases in
         (S_Case (e, List.rev cases), lenv)
@@ -1190,8 +1294,28 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         let t_e', e' = annotate_expr tenv lenv e in
         let+ () = check_type_satisfies s tenv t_e' t_bool in
         (S_Assert e', lenv)
-    | S_TypeDecl (x, t) ->
-        (s.desc, IMap.add x (get_structure tenv.globals t) lenv)
+    | S_Decl (ldk, ldi, e_opt) -> (
+        match (ldk, e_opt) with
+        | _, Some e ->
+            let t_e, e = annotate_expr tenv lenv e in
+            let lenv, le = annotate_local_decl_item s tenv lenv t_e ldi in
+            (* TODO:
+               - The initialization expression in a local constant declaration
+                 must be a compile-time-constant expression.
+               - A local storage element declared with constant is initialized
+                 with the value of its initialization expression during
+                 compilation.
+               - Initialization expressions in local constant declarations must
+                 be non-side-effecting.
+            *)
+            (S_Assign (le, e), lenv)
+        | LDK_Var, None ->
+            (* TODO *)
+            let lenv, s = annotate_local_decl_item_uninit s tenv lenv ldi in
+            (s.desc, lenv)
+        | (LDK_Constant | LDK_Let), None ->
+            (* by construction in Parser. *)
+            assert false)
 
   and try_annotate_stmt tenv lenv s =
     best_effort (s, lenv) (fun (s, lenv) -> annotate_stmt tenv lenv s)
@@ -1332,7 +1456,7 @@ let build_genv : AST.t -> genv =
   let one_decl acc = function
     | D_TypeDecl (name, ({ desc = T_Enum ids; _ } as ty)) ->
         let acc = IMap.add name ty acc in
-        let id_type = T_Named name |> ASTUtils.add_dummy_pos in
+        let id_type = T_Named name |> add_dummy_pos in
         let add_one_id acc x = IMap.add x id_type acc in
         List.fold_left add_one_id acc ids
     | D_TypeDecl (name, ty) | D_GlobalConst (name, ty, _) ->

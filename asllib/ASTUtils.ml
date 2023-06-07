@@ -30,6 +30,16 @@ let map_desc f thing = f thing |> add_pos_from thing
 let list_equal equal li1 li2 =
   li1 == li2 || (List.compare_lengths li1 li2 = 0 && List.for_all2 equal li1 li2)
 
+(* Straight out of stdlib v5.0 *)
+let list_fold_left_map f accu l =
+  let rec aux accu l_accu = function
+    | [] -> (accu, List.rev l_accu)
+    | x :: l ->
+        let accu, x = f accu x in
+        aux accu (x :: l_accu) l
+  in
+  aux accu [] l
+
 let pair_equal f g (x1, y1) (x2, y2) = f x1 x2 && g y1 y2
 
 let map2_desc f thing1 thing2 =
@@ -113,7 +123,8 @@ let used_identifiers, used_identifiers_stmt =
         List.fold_left use_e acc args
     | S_Cond (e, s1, s2) -> use_s (use_s (use_e acc e) s2) s1
     | S_Case (e, cases) -> List.fold_left use_case (use_e acc e) cases
-    | S_TypeDecl _ -> acc
+    | S_Decl (_, _, Some e) -> use_e acc e
+    | S_Decl (_, _, None) -> acc
   and use_case acc { desc = _p, stmt; _ } = use_s acc stmt
   and use_le acc _le = acc
   and use_decl acc = function

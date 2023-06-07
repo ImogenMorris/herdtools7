@@ -53,6 +53,9 @@ open ASTUtils
 
 let t_bit = T_Bits (BitWidth_Determined (E_Literal (V_Int 1) |> add_dummy_pos), [])
 
+let make_ldi_tuple xs ty =
+  LDI_Tuple (List.map (fun x -> LDI_Var (x, None)) xs, Some ty)
+
 %}
 
 (* ------------------------------------------------------------------------
@@ -193,6 +196,9 @@ let nclist(x) == separated_nonempty_list(COMMA, x)
 
 (* A comma separated list. *)
 let clist(x) == { [] } | nclist(x)
+
+(* A comma separated list with at least 2 elements. *)
+let clist2(x) == ~=x; COMMA; li=nclist(x); { x :: li }
 
 (* A comma-separated trailing list. *)
 let tclist(x) == trailing_list(COMMA, x)
@@ -403,17 +409,19 @@ let lexpr_atom :=
    have to declare new variables. *)
 
 let decl_item ==
-  annotated ( terminated (
-    | le_var
-    | MINUS; lexpr_ignore
-    | ~=pared(nclist(decl_item)); <LE_TupleUnpack>
-  , ty_opt))
+  | ~=IDENTIFIER               ; ~=ty_opt ; < LDI_Var    >
+  | MINUS                      ; ~=ty_opt ; < LDI_Ignore >
+  | ~=pared(nclist(decl_item)) ; ~=ty_opt ; < LDI_Tuple  >
 
 (* ------------------------------------------------------------------------- *)
 (* Statement helpers *)
 
-let assignment_keyword == LET | CONSTANT | VAR
-let storage_keyword    == LET | CONSTANT | VAR | CONFIG
+let local_decl_keyword ==
+  | LET       ; { LDK_Let       }
+  | VAR       ; { LDK_Var       }
+  | CONSTANT  ; { LDK_Constant  }
+
+let storage_keyword == LET | CONSTANT | VAR | CONFIG
 
 let pass == { S_Pass }
 let unimplemented_stmt(x) == x ; pass
@@ -450,16 +458,18 @@ let stmt ==
       | RETURN; ~=ioption(expr);                  < S_Return >
       | x=IDENTIFIER; args=plist(expr); ~=nargs;  < S_Call   >
       | ASSERT; e=expr;                           < S_Assert >
+      | ~=lexpr; EQ; ~=expr;                      < S_Assign >
 
-      | assign(lexpr, expr)
-      | assignment_keyword; assign(decl_item, expr)
+      | ~=local_decl_keyword; ~=decl_item; EQ; ~=some(expr); < S_Decl >
+      | VAR; x=IDENTIFIER; COLON_COLON; ~=ty;
+          { S_Decl (LDK_Var, LDI_Var (x, Some ty), None) }
+      | VAR; xs=clist2(IDENTIFIER); COLON_COLON; ~=ty;
+          { S_Decl (LDK_Var, make_ldi_tuple xs ty, None) }
 
       | unimplemented_stmt(
         | THROW; ioption(expr);                                               <>
         | REPEAT; stmt_list; UNTIL; expr;                                     <>
         (* We have to manually expend the list otherwise we have a shift/reduce conflict. *)
-        | VAR; IDENTIFIER;                            as_ty;                  <>
-        | VAR; IDENTIFIER; COMMA; nclist(IDENTIFIER); as_ty;                  <>
         | PRAGMA; IDENTIFIER; clist(expr);                                    <>
       )
     )

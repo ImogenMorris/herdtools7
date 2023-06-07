@@ -605,7 +605,6 @@ module Make (B : Backend.S) (C : Config) = struct
   and eval_stmt (env : env) s =
     match s.desc with
     | S_Pass -> continue env |: Rule.Pass
-    | S_TypeDecl _ -> continue env
     | S_Assign
         ( { desc = LE_TupleUnpack les; _ },
           { desc = E_Call (name, args, named_args); _ } )
@@ -651,6 +650,9 @@ module Make (B : Backend.S) (C : Config) = struct
         B.bind_ctrl (B.choice v (return true) (return false)) @@ fun b ->
         if b then continue env
         else fatal_from e @@ Error.AssertionFailed e |: Rule.Assert
+    | S_Decl (_dlk, _dli, _e_opt) ->
+        (* Type checking should change those into S_Assign. *)
+        fatal_from s Error.TypeInferenceNeeded
 
   (** [eval_func genv name pos args nargs] evaluate the function named [name]
       in the global environment [genv], with [args] the formal arguments, and
