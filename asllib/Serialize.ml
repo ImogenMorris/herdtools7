@@ -184,7 +184,6 @@ let pp_typed_identifier = pp_pair pp_string pp_ty
 let rec pp_lexpr =
   let pp_desc f = function
     | LE_Var x -> bprintf f "LE_Var %S" x
-    | LE_Typed (le, t) -> bprintf f "E_Typed (%a, %a)" pp_lexpr le pp_ty t
     | LE_Slice (le, args) ->
         bprintf f "LE_Slice (%a, %a)" pp_lexpr le pp_slice_list args
     | LE_SetField (le, x, _ta) ->

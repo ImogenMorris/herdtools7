@@ -396,7 +396,6 @@ let lexpr ==
 let lexpr_atom :=
   | le_var
   | le=annotated(lexpr_atom); ~=slices; <LE_Slice>
-  | le=annotated(lexpr_atom); ty=as_ty; <LE_Typed>
   | le=annotated(lexpr_atom); DOT; field=IDENTIFIER; ~=without_ta; <LE_SetField>
   | le=annotated(lexpr_atom); DOT; li=bracketed(clist(IDENTIFIER)); ~=without_ta; <LE_SetFields>
 

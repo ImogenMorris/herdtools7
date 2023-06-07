@@ -122,83 +122,53 @@ begin
   end
 end
 
-func LSL_C(x :: bits(N), shift :: integer) => (bits(N), bit)
+// The shift functions LSL, LSR, ASR and ROR accept a non-negative shift amount.
+// The shift functions LSL_C, LSR_C, ASR_C and ROR_C accept a non-zero positive shift amount.
+
+// Logical left shift
+func LSL{N}(x:: bits(N), shift:: integer{0..N-1}) => bits(N)
 begin
-  assert shift > 0 && shift < 256;
-  extended_x = [x, Zeros(shift)];
-  result = extended_x[N-1:0];
-  carry_out = extended_x[N];
-  return (result, carry_out);
+    return [x[N-shift-1:0], Zeros(shift)];
 end
 
-func LSL(x :: bits(N), shift :: integer) => bits(N)
+// Logical left shift with carry out.
+func LSL_C{N}(x:: bits(N), shift:: integer{1..N-1}) => (bits(N), bit)
 begin
-  assert shift >= 0;
-  if shift == 0 then
-    return x;
-  else
-    let (result, -) = LSL_C(x, shift);
-    return result;
-  end
+    return (LSL(x, shift), x[N-shift]);
 end
 
-func LSR_C(x :: bits(N), shift :: integer) => (bits(N), bit)
+// Logical right shift, shifting zeroes into higher bits.
+func LSR{N}(x:: bits(N), shift:: integer{0..N-1}) => bits(N)
 begin
-  assert shift > 0 && shift < 256;
-  extended_x = ZeroExtend(x, shift+N);
-  result = extended_x[shift+N-1 : shift];
-  carry_out = extended_x[shift-1];
-  return (result, carry_out);
+    return ZeroExtend(x[N-shift-1:shift], N);
 end
 
-func LSR(x :: bits(N), shift :: integer) => bits(N)
+// Logical right shift with carry out.
+func LSR_C{N}(x:: bits(N), shift:: integer{1..N-1}) => (bits(N), bit)
 begin
-  assert shift >= 0;
-  if shift == 0 then
-    return x;
-  else
-    let (result, -) = LSR_C(x, shift);
-    return result;
-  end
+    return (LSR(x, shift), x[shift-1]);
 end
 
-func ASR_C(x :: bits(N), shift :: integer) => (bits(N), bit)
+// Arithmetic right shift, shifting sign bits into higher bits.
+func ASR{N}(x:: bits(N), shift:: integer{0..N-1}) => bits(N)
 begin
-  assert shift > 0 && shift < 256;
-  extended_x = SignExtend(x, shift+N);
-  result = extended_x[shift+N-1:shift];
-  carry_out = extended_x[shift-1];
-  return (result, carry_out);
+    return SignExtend(x[N-shift-1:shift], N);
 end
 
-func ASR(x :: bits(N), shift :: integer) => bits(N)
+// Arithmetic right shift with carry out.
+func ASR_C{N}(x:: bits(N), shift:: integer{1..N-1}) => (bits(N), bit)
 begin
-  assert shift >= 0;
-  if shift == 0 then
-    return x;
-  else
-    let (result, -) = ASR_C(x, shift);
-    return result;
-  end
+    return (ASR(x, shift), x[shift-1]);
 end
 
-func ROR_C(x :: bits(N), shift :: integer) => (bits(N), bit)
+// Rotate right.
+  func ROR{N}(x:: bits(N), shift:: integer{0..N-1}) => bits(N)
 begin
-  assert shift != 0 && shift < 256;
-  m = shift MOD N;
-  result = LSR(x,m) OR LSL(x,N-m);
-  carry_out = result[N-1];
-  return (result, carry_out);
+    return [x[0+:shift], x[shift+:N-1]];
 end
 
-func ROR(x :: bits(N), shift :: integer) => bits(N)
+// Rotate right with carry out.
+func ROR_C{N}(x:: bits(N), shift:: integer{1..N-1}) => (bits(N), bit)
 begin
-  assert shift >= 0;
-  if shift == 0 then
-    return x;
-  else
-    let (result, -) = ROR_C(x, shift);
-    return result;
-  end
+    return (ROR(x, shift), x[shift-1]);
 end
-

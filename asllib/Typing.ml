@@ -268,7 +268,6 @@ let sum = function
   | h :: t -> List.fold_left plus h t
 
 let slices_length =
-  let open ASTUtils in
   let minus = binop MINUS in
   let one = expr_of_int 1 in
   let slice_length = function
@@ -340,7 +339,6 @@ let infer_value = function
 
 let rec infer_lexpr tenv lenv le =
   match le.desc with
-  | LE_Typed (_le, t) -> get_structure tenv.globals t
   | LE_Var x -> lookup tenv lenv le x
   | LE_Slice ({ desc = LE_Var x; _ }, _) when IMap.mem x tenv.funcs ->
       lookup_return_type tenv le x
@@ -392,9 +390,6 @@ let getter_should_reduce_to_call tenv x slices =
 let rec setter_should_reduce_to_call_s tenv le e : stmt option =
   let here d = add_pos_from le d in
   let s_then = s_then in
-  let rec_desc le' e_desc =
-    add_pos_from le e_desc |> setter_should_reduce_to_call_s tenv le'
-  in
   let to_expr = expr_of_lexpr in
   let with_temp old_le sub_le =
     let x = fresh_var "setter_setfield" in
@@ -426,7 +421,6 @@ let rec setter_should_reduce_to_call_s tenv le e : stmt option =
       let old_le le' = LE_Slice (le', slices) |> here in
       with_temp old_le sub_le
   | LE_TupleUnpack _ -> None
-  | LE_Typed (le', ty) -> E_Typed (e, ty) |> rec_desc le'
   | LE_Var x -> (
       match should_reduce_to_call tenv (setter_name x) [ e ] with
       | Some (name, args, _) -> Some (S_Call (name, args, []) |> here)
@@ -1061,7 +1055,6 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     @@
     match le.desc with
     | LE_Var _ -> le.desc
-    | LE_Typed (le, t) -> LE_Typed (annotate_lexpr_fallback tenv lenv le, t)
     | LE_Slice (le, slices) ->
         LE_Slice
           ( annotate_lexpr_fallback tenv lenv le,
@@ -1080,24 +1073,44 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | LE_TupleUnpack les ->
         LE_TupleUnpack (List.map (annotate_lexpr_fallback tenv lenv) les)
 
+  let can_assign_to tenv s t =
+    (* Rules:
+       - GNTS: It is illegal for a storage element whose type has the structure
+         of the under-constrained integer to be assigned a value whose type has
+         the structure of the under-constrained integer.
+       - LXQZ: A storage element of type S, where S is any type that does not have the
+         structure of the under-constrained integer type, may only be
+         assigned or initialized with a value of type T if T type-satisfies S
+    *)
+    (* TODO: incomplete. *)
+    let s_struct = get_structure tenv.globals s
+    and t_struct = get_structure tenv.globals t in
+    match (s_struct.desc, t_struct.desc) with
+    | T_Int (Some []), T_Int (Some []) -> false
+    | _ -> Types.type_satisfies (tenv.globals, IMap.empty) t s
+
   let rec annotate_lexpr tenv lenv le t_e =
     match le.desc with
-    | LE_Var x -> (
+    | LE_Var x ->
         (* TODO: Handle setting global var *)
-        match IMap.find_opt x lenv with
-        | None ->
-            (* TODO: we need a better handling of declarations than that. *)
-            let lenv = IMap.add x t_e lenv in
-            (lenv, le)
-        | Some ty ->
-            let+ () = check_type_satisfies le tenv ty t_e in
-            (lenv, le))
+        let ty =
+          match IMap.find_opt x lenv with
+          | None -> (
+              match IMap.find_opt x tenv.globals with
+              | Some ty -> ty
+              | None -> undefined_identifier le x)
+          | Some ty -> ty
+        in
+        let+ () =
+         fun () ->
+          if can_assign_to tenv ty t_e then ()
+          else
+            fatal_from le
+              (Error.NotYetImplemented
+                 "Cannot assign to variable because bad type.")
+        in
+        (lenv, le)
     | LE_Ignore -> (lenv, le)
-    | LE_Typed (le', ty) ->
-        let ty = get_structure tenv.globals ty in
-        (* TODO: what happens when le is already declared in lenv? *)
-        let+ () = check_type_satisfies le tenv ty t_e in
-        annotate_lexpr tenv lenv le' ty
     | LE_TupleUnpack les -> (
         match t_e.desc with
         | T_Tuple sub_tys ->
@@ -1131,7 +1144,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     *)
     let s_struct = get_structure tenv.globals s in
     match s_struct.desc with
-    | T_Int (Some _) -> assert false
+    | T_Int (Some []) -> (* TODO *) assert false
     | _ -> Types.type_satisfies (tenv.globals, IMap.empty) t s
 
   let check_var_not_in_env loc tenv lenv x () =

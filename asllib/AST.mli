@@ -180,7 +180,6 @@ and typed_identifier = identifier * ty
 type lexpr_desc =
   | LE_Ignore
   | LE_Var of identifier
-  | LE_Typed of lexpr * ty
   | LE_Slice of lexpr * slice list
   | LE_SetField of lexpr * identifier * type_annot
   | LE_SetFields of lexpr * identifier list * type_annot

@@ -256,7 +256,6 @@ let expr_of_lexpr : lexpr -> expr =
   let rec aux le =
     match le.desc with
     | LE_Var x -> E_Var x
-    | LE_Typed (le, t) -> E_Typed (map_desc aux le, t)
     | LE_Slice (le, args) -> E_Slice (map_desc aux le, args)
     | LE_SetField (le, x, ta) -> E_GetField (map_desc aux le, x, ta)
     | LE_SetFields (le, x, ta) -> E_GetFields (map_desc aux le, x, ta)

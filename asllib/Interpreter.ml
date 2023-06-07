@@ -536,7 +536,6 @@ module Make (B : Backend.S) (C : Config) = struct
   and eval_lexpr (env : env) le : B.value B.m -> env B.m =
     match le.desc with
     | LE_Ignore -> fun _ -> return env |: Rule.LEIgnore
-    | LE_Typed (le, _t) -> eval_lexpr env le >|: Rule.LETyped
     | LE_Var x -> write_identifier env x >|: Rule.LELocalVar
     | LE_Slice (le', slices) ->
         let setter = eval_lexpr env le' in
