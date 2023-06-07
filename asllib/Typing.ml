@@ -4,7 +4,6 @@ open ASTUtils
 let fatal_from = Error.fatal_from
 let not_yet_implemented pos s = fatal_from pos (Error.NotYetImplemented s)
 let undefined_identifier pos x = fatal_from pos (Error.UndefinedIdentifier x)
-let bad_field pos x ty = fatal_from pos (Error.BadField (x, ty))
 
 let conflict pos expected provided =
   fatal_from pos (Error.ConflictingTypes (expected, provided))
@@ -290,31 +289,6 @@ let width_plus acc w =
   | _ ->
       failwith "Not yet implemented: concatening slices constrained from type."
 
-let field_type pos x ty =
-  match ty.desc with
-  | T_Record li -> (
-      match List.assoc_opt x li with
-      | Some ty -> ty
-      | None -> bad_field pos x ty)
-  | T_Bits (_, fields) -> (
-      match List.assoc_opt x fields with
-      | Some slices ->
-          slices_length slices |> t_bits_bitwidth |> add_pos_from_st ty
-      | None -> bad_field pos x ty)
-  | _ -> bad_field pos x ty
-
-let fields_type pos xs ty =
-  let field_length =
-    match ty.desc with
-    | T_Bits (_, fields) -> (
-        fun x ->
-          match List.assoc_opt x fields with
-          | None -> bad_field pos x ty
-          | Some slices -> slices_length slices)
-    | _ -> conflict pos [ default_t_bits ] ty
-  in
-  List.map field_length xs |> sum |> t_bits_bitwidth |> add_pos_from_st ty
-
 let rename_ty_eqs (eqs : (AST.identifier * AST.expr) list) ty =
   let mapping = IMap.of_list eqs in
   match ty.desc with
@@ -323,40 +297,6 @@ let rename_ty_eqs (eqs : (AST.identifier * AST.expr) list) ty =
       let new_e = IMap.find callee_var mapping |> with_pos_from e in
       T_Bits (BitWidth_Determined new_e, fields) |> add_pos_from_st ty
   | _ -> ty
-
-(******************************************************************************)
-(*                                                                            *)
-(*                   Inference and type-checking helpers                      *)
-(*                                                                            *)
-(******************************************************************************)
-
-let infer_value = function
-  | V_Int i -> T_Int (Some [ Constraint_Exact (expr_of_int i) ])
-  | V_Bool _ -> T_Bool
-  | V_Real _ -> T_Real
-  | V_BitVector bv -> Bitvector.length bv |> expr_of_int |> t_bits_bitwidth
-  | _ -> not_yet_implemented dummy_annotated "static complex values"
-
-let rec infer_lexpr tenv lenv le =
-  match le.desc with
-  | LE_Var x -> lookup tenv lenv le x
-  | LE_Slice ({ desc = LE_Var x; _ }, _) when IMap.mem x tenv.funcs ->
-      lookup_return_type tenv le x
-  | LE_Slice (le', slices) -> (
-      let ty = infer_lexpr tenv lenv le' in
-      match ty.desc with
-      | T_Bits _ -> slices_length slices |> t_bits_bitwidth |> add_dummy_pos
-      | _ -> conflict le [ default_t_bits ] ty)
-  | LE_SetField (_, field, TA_InferredStructure ty) -> field_type le field ty
-  | LE_SetFields (_, fields, TA_InferredStructure ty) ->
-      fields_type le fields ty
-  | LE_SetField (le, fields, TA_None) ->
-      infer_lexpr tenv lenv le |> field_type le fields
-  | LE_SetFields (le, fields, TA_None) ->
-      infer_lexpr tenv lenv le |> fields_type le fields
-  | LE_Ignore -> not_yet_implemented le "Type inference of '-'"
-  | LE_TupleUnpack les ->
-      T_Tuple (List.map (infer_lexpr tenv lenv) les) |> add_dummy_pos
 
 (* -------------------------------------------------------------------------
 
@@ -482,6 +422,13 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
   let assumption_failed () = raise_notrace TypingAssumptionFailed [@@inline]
   let check_true b fail () = if b then () else fail () [@@inline]
   let check_true' b = check_true b assumption_failed [@@inline]
+
+  let infer_value = function
+    | V_Int i -> T_Int (Some [ Constraint_Exact (expr_of_int i) ])
+    | V_Bool _ -> T_Bool
+    | V_Real _ -> T_Real
+    | V_BitVector bv -> Bitvector.length bv |> expr_of_int |> t_bits_bitwidth
+    | _ -> not_yet_implemented dummy_annotated "static complex values"
 
   let eval' _tenv =
     let lookup _s = assumption_failed () in
@@ -1050,29 +997,6 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         in
         (T_Bool |> add_pos_from e, E_Pattern (e', patterns) |> add_pos_from_st e)
 
-  let rec annotate_lexpr_fallback tenv lenv le =
-    add_pos_from_st le
-    @@
-    match le.desc with
-    | LE_Var _ -> le.desc
-    | LE_Slice (le, slices) ->
-        LE_Slice
-          ( annotate_lexpr_fallback tenv lenv le,
-            annotate_slices tenv lenv slices )
-    | LE_SetField (le', field, _ta) -> (
-        let le' = annotate_lexpr_fallback tenv lenv le' in
-        let ty = infer_lexpr tenv lenv le' in
-        match ty.desc with
-        | T_Bits _ -> LE_SetFields (le', [ field ], TA_InferredStructure ty)
-        | _ -> LE_SetField (le', field, TA_InferredStructure ty))
-    | LE_SetFields (le', fields, _ta) ->
-        let le' = annotate_lexpr_fallback tenv lenv le' in
-        let ty = infer_lexpr tenv lenv le' in
-        LE_SetFields (le', fields, TA_InferredStructure ty)
-    | LE_Ignore -> LE_Ignore
-    | LE_TupleUnpack les ->
-        LE_TupleUnpack (List.map (annotate_lexpr_fallback tenv lenv) les)
-
   let can_assign_to tenv s t =
     (* Rules:
        - GNTS: It is illegal for a storage element whose type has the structure
@@ -1089,28 +1013,31 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | T_Int (Some []), T_Int (Some []) -> false
     | _ -> Types.type_satisfies (tenv.globals, IMap.empty) t s
 
+  let check_can_assign_to loc tenv s t () =
+    if can_assign_to tenv s t then ()
+    else
+      let () = Format.eprintf "%a <-- %a@." PP.pp_ty s PP.pp_ty t in
+      fatal_from loc
+        (Error.NotYetImplemented "Cannot assign to variable because bad type.")
+
   let rec annotate_lexpr tenv lenv le t_e =
     match le.desc with
     | LE_Var x ->
         (* TODO: Handle setting global var *)
-        let ty =
-          match IMap.find_opt x lenv with
-          | None -> (
-              match IMap.find_opt x tenv.globals with
-              | Some ty -> ty
-              | None -> undefined_identifier le x)
-          | Some ty -> ty
-        in
         let+ () =
          fun () ->
-          if can_assign_to tenv ty t_e then ()
-          else
-            fatal_from le
-              (Error.NotYetImplemented
-                 "Cannot assign to variable because bad type.")
+          let ty =
+            match IMap.find_opt x lenv with
+            | None -> (
+                match IMap.find_opt x tenv.globals with
+                | Some ty -> ty
+                | None -> undefined_identifier le x)
+            | Some ty -> ty
+          in
+          check_can_assign_to le tenv ty t_e ()
         in
-        (lenv, le)
-    | LE_Ignore -> (lenv, le)
+        le
+    | LE_Ignore -> le
     | LE_TupleUnpack les -> (
         match t_e.desc with
         | T_Tuple sub_tys ->
@@ -1119,14 +1046,64 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
                 (Error.BadArity
                    ("tuple unpacking", List.length sub_tys, List.length les))
             else
-              let folder (lenv, sub_les) sub_le sub_ty =
-                let lenv, sub_le' = annotate_lexpr tenv lenv sub_le sub_ty in
-                (lenv, sub_le' :: sub_les)
-              in
-              let lenv, les' = List.fold_left2 folder (lenv, []) les sub_tys in
-              (lenv, LE_TupleUnpack (List.rev les') |> add_pos_from_st le)
+              let les' = List.map2 (annotate_lexpr tenv lenv) les sub_tys in
+              LE_TupleUnpack les' |> add_pos_from_st le
         | _ -> conflict le [ T_Tuple [] ] t_e)
-    | _ -> (lenv, annotate_lexpr_fallback tenv lenv le)
+    | LE_Slice (le', slices) ->
+        let t_le, _ = expr_of_lexpr le' |> annotate_expr tenv lenv in
+        let+ () = check_structure_bits le tenv t_le in
+        let le' = annotate_lexpr tenv lenv le' t_le in
+        let+ () =
+         fun () ->
+          let length = slices_length slices |> reduce_constants in
+          let t = T_Bits (BitWidth_Determined length, []) |> add_pos_from le in
+          check_can_assign_to le tenv t t_e ()
+        in
+        let slices = best_effort slices (annotate_slices tenv lenv) in
+        LE_Slice (le', slices) |> add_pos_from_st le
+    | LE_SetField (le', field, _ta) -> (
+        let t_le', _ = expr_of_lexpr le' |> annotate_expr tenv lenv in
+        let le' = annotate_lexpr tenv lenv le' t_le' in
+        let t_le'_struct = get_structure tenv.globals t_le' in
+        match t_le'_struct.desc with
+        | T_Record fields ->
+            let t =
+              match List.assoc_opt field fields with
+              | None -> fatal_from le (Error.BadField (field, t_le'))
+              | Some t -> t
+            in
+            let+ () = check_can_assign_to le tenv t t_e in
+            LE_SetField (le', field, TA_InferredStructure t_le'_struct)
+            |> add_pos_from le
+        | T_Bits (_, bitfields) -> (
+            match List.assoc_opt field bitfields with
+            | None -> fatal_from le (Error.BadField (field, t_le'_struct))
+            | Some slice ->
+                let w = slices_length slice in
+                let t = T_Bits (BitWidth_Determined w, []) |> add_pos_from le in
+                let+ () = check_can_assign_to le tenv t t_e in
+                LE_SetFields (le', [ field ], TA_InferredStructure t_le'_struct)
+                |> add_pos_from le)
+        | _ -> conflict le [ default_t_bits; T_Record [] ] t_e)
+    | LE_SetFields (le', fields, _ta) ->
+        let t_le', _ = expr_of_lexpr le' |> annotate_expr tenv lenv in
+        let le' = annotate_lexpr tenv lenv le' t_le' in
+        let t_le'_struct = get_structure tenv.globals t_le' in
+        let bitfields =
+          match t_le'_struct.desc with
+          | T_Bits (_, bitfields) -> bitfields
+          | _ -> conflict le [ default_t_bits ] t_le'
+        in
+        let one_field field =
+          match List.assoc_opt field bitfields with
+          | None -> fatal_from le (Error.BadField (field, t_le'_struct))
+          | Some slices -> slices_length slices
+        in
+        let w = List.map one_field fields |> sum |> reduce_constants in
+        let t = T_Bits (BitWidth_Determined w, []) |> add_pos_from le in
+        let+ () = check_can_assign_to le tenv t t_e in
+        LE_SetFields (le', fields, TA_InferredStructure t_le'_struct)
+        |> add_pos_from le
 
   let can_be_initialized_with tenv s t =
     (* Rules:
@@ -1271,7 +1248,7 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         match reduced with
         | Some { desc = s; _ } -> tr_desc s
         | None ->
-            let lenv, le = annotate_lexpr tenv lenv le t_e in
+            let le = annotate_lexpr tenv lenv le t_e in
             (S_Assign (le, e), lenv))
     | S_Call (name, args, named_args) ->
         let arg_types, args =

@@ -340,6 +340,9 @@ and domain_subtype_satisfies env t s =
       | BitWidth_Constrained _, T_Bits _ | _, T_Bits (BitWidth_Constrained _, _)
         ->
           Domain.(is_subset (of_type env s_struct) (of_type env t_struct))
+      | BitWidth_Determined _, T_Bits (BitWidth_Determined _, _) ->
+          Domain.(
+            is_subset (of_type env (get_structure env t)) (of_type env s_struct))
       | _ -> false)
 
 and subtype_satisfies env t s =

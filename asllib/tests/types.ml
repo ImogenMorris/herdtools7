@@ -97,6 +97,12 @@ let subtype_examples () =
 
   assert (not (subtype_satisfies empty_env bits_2_4 bits_4));
 
+  let bits_btifields =
+    !!(T_Bits (BitWidth_Determined !$4, [ ("a", [ Slice_Single !$3 ]) ]))
+  in
+
+  assert (domain_subtype_satisfies empty_env bits_btifields bits_btifields);
+
   ()
 
 let type_examples () =
