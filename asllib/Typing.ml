@@ -1268,14 +1268,14 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
     | S_Cond (e, s1, s2) ->
         let t_cond, e = annotate_expr tenv lenv e in
         let+ () = check_type_satisfies e tenv t_cond t_bool in
-        let s1, lenv = try_annotate_stmt tenv lenv s1 in
-        let s2, lenv = try_annotate_stmt tenv lenv s2 in
+        let s1, lenv = try_annotate_block tenv lenv s1 in
+        let s2, lenv = try_annotate_block tenv lenv s2 in
         (S_Cond (e, s1, s2), lenv)
     | S_Case (e, cases) ->
         let e = try_annotate_expr tenv lenv e in
         let annotate_case (acc, lenv) case =
           let p, s = case.desc in
-          let s, lenv = try_annotate_stmt tenv lenv s in
+          let s, lenv = try_annotate_block tenv lenv s in
           (add_pos_from_st case (p, s) :: acc, lenv)
         in
         let cases, lenv = List.fold_left annotate_case ([], lenv) cases in
@@ -1306,6 +1306,10 @@ module Annotate (C : ANNOTATE_CONFIG) = struct
         | (LDK_Constant | LDK_Let), None ->
             (* by construction in Parser. *)
             assert false)
+
+  and try_annotate_block tenv lenv s =
+    let s,_ = try_annotate_stmt tenv lenv s in
+    s,lenv
 
   and try_annotate_stmt tenv lenv s =
     best_effort (s, lenv) (fun (s, lenv) -> annotate_stmt tenv lenv s)
