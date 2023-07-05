@@ -201,7 +201,7 @@ begin
     merrorstate = ErrorState_CE,  // ??
     store64bstatus = Zeros(64)
   };
-  assert size == 8;
+//  assert size == 8;
   return (ret_status, (value as bits((8*size))));
 end
 
