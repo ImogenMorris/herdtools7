@@ -154,6 +154,9 @@ let make_ldi_tuple xs ty =
 %type <unit AST.t> opn
 %start opn
 
+(* Parse statements, as one *)
+%type <AST.stmt> stmts
+%start stmts
 %%
 
 (* ------------------------------------------------------------------------
@@ -600,3 +603,5 @@ let opn := body=stmt;
         |> ASTUtils.add_pos_from body
       ]
     }
+
+let stmts := terminated(stmt_list,EOF)

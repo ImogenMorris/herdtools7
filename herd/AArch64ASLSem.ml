@@ -232,9 +232,33 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
                   "n" ^= liti 31;
                   "imm" ^= litbv datasize k;
                   "datasize" ^= liti datasize;
-                  "op" ^= logical_op EOR;
-                  "setflags" ^= setflags EOR;
+                  "op" ^= logical_op ORR;
+                  "setflags" ^= setflags ORR;
                 ] )
+      | I_UBFM (v,rd,rn,immr,imms) ->
+         let datasize = variant_raw v in
+         let bitvariant =
+           let open AArch64Base in
+           match v with
+           | V64 -> 1
+           | V32 -> 0
+           | V128 -> assert false in
+         let added =
+           ASLBase.stmts_from_string
+              "let r = UInt(immr);\n\
+              var wmask : bits(datasize);\n\
+              var tmask : bits(datasize) ;\n\
+              (wmask,tmask) = DecodeBitMasks(N, imms, immr, FALSE, datasize);"
+         in
+         Some
+           ("integer/bitfield.opn",
+            stmt
+              ([ "d" ^= reg rd;
+                "n" ^= reg rn;
+                "immr" ^= litbv 6 immr;
+                "imms" ^= litbv 6 imms;
+                "N" ^= litbv 1 bitvariant;
+                "datasize" ^= liti datasize; ]@[added]))
       | I_OP3 (v, op, rd, rn, RV (v', rm), S_NOEXT) when v = v' -> (
           match op with
           | AND | ANDS | BIC | BICS | EOR | ORN | ORR ->
@@ -309,7 +333,7 @@ module Make (TopConf : AArch64Sig.Config) (V : Value.AArch64) :
             | S_UXTW -> "ExtendType_UXTW"
             | S_LSL _ -> "ExtendType_UXTX"
             | _ ->
-                Warn.fatal "Unsupported barrel shif† for LDR: %s."
+                Warn.fatal "Unsupported barrel shift for LDR: %s."
                   (AArch64Base.pp_barrel_shift "" barrel_shift string_of_int)
           in
           let shift =

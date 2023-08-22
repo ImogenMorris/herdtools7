@@ -125,7 +125,7 @@ module Make (B : Backend.S) (C : Config) = struct
       let use_e e acc = use_e acc e in
       let use_ty _ty acc = acc (* TODO *) in
       fun d ->
-        match d.desc with 
+        match d.desc with
         | D_GlobalStorage { initial_value = Some e; ty = Some ty; _ } ->
             ISet.empty |> use_e e |> use_ty ty
         | D_GlobalStorage { initial_value = None; ty = Some ty; _ } ->
@@ -329,6 +329,12 @@ module Make (B : Backend.S) (C : Config) = struct
     | E_Binop (op, e1, e2) ->
         let** (v1, v2), env = fold_par eval_expr env e1 e2 in
         let* v = B.binop op v1 v2 in
+        let () =
+          if false  then begin
+            Format.eprintf "@[<3>Eval@ @[%a@]@]@." PP.pp_expr e;
+            Printf.eprintf "v1=%s, v2=%s -> v=%s\n%!"
+              (B.debug_value v1) (B.debug_value v2) (B.debug_value v)
+            end in
         normal (v, env) |: Rule.Binop
     | E_Unop (op, e) ->
         let** v, env = eval_expr env e in
@@ -352,6 +358,15 @@ module Make (B : Backend.S) (C : Config) = struct
         let* v' = B.read_from_bitvector positions v in
         normal (v', env) |: Rule.ESlice
     | E_Call (name, args, named_args) ->
+         let () =
+           if false then
+             match named_args with
+             | [] -> ()
+             | xs ->
+                Printf.eprintf
+                  "Calling %s with named args [%s]\n%!"
+                  name
+                  (List.map fst xs |> String.concat ",") in
         let**| ms, env = eval_call (to_pos e) name env args named_args in
         let* v =
           match ms with
@@ -398,7 +413,13 @@ module Make (B : Backend.S) (C : Config) = struct
 
   and eval_expr_sef env e : B.value m =
     eval_expr env e >>= function
-    | Normal (v, _env) -> return v
+    | Normal (v, _env) ->
+       let () =
+         if false then
+           Format.eprintf
+           "@[<3>Eval@ @[%a@]@ -> %s]@@." PP.pp_expr e (B.debug_value v)
+       in
+       return v
     | Throwing (None, _) ->
         let msg =
           Format.asprintf
@@ -831,10 +852,13 @@ module Make (B : Backend.S) (C : Config) = struct
   (** [eval_call pos name env args named_args] evaluate the call to function
       [name] with arguments [args] and parameters [named_args] *)
   and eval_call pos name env args named_args =
+    if false then
+      Printf.eprintf "%s:Calling %s\n%!" (PP.pp_pos_str pos) name ;
     let names, nargs = List.split named_args in
     let** (vargs, nargs), env = fold_par eval_expr_list_m env args nargs in
     let nargs = List.combine names nargs in
     let**| ms, global = eval_func env.global name pos vargs nargs in
+    if false then Printf.eprintf "Returned from %s\n%!" name ;
     let ms = List.map read_value_from ms and env = { env with global } in
     normal (ms, env)
 
@@ -874,14 +898,29 @@ module Make (B : Backend.S) (C : Config) = struct
       when List.compare_lengths args arg_decls <> 0 ->
         fatal_from pos
         @@ Error.BadArity (name, List.length arg_decls, List.length args)
-    | Some (r, { body = SB_ASL body; args = arg_decls; _ }) -> (
-        let () = if false then Format.eprintf "Evaluating %s.@." name in
+    | Some (r, { body = SB_ASL body; args = arg_decls; parameters=pa; _ }) -> (
+        let () =
+          if false then
+            Format.eprintf "Evaluating %s%s.@." name
+              (match pa with
+               | [] -> ""
+               | _ ->
+                  "{"
+                  ^
+                    (List.map fst pa |> String.concat ",")
+                  ^ "}")
+        in
         let scope = Scope_Local (name, !r) in
         let () = incr r in
         let env = IEnv.{ global = genv; local = empty_scoped scope } in
-        let one_arg envm (x, _) m = declare_local_identifier_mm envm x m in
+        let one_arg envm (x, _) m =
+          if false then
+            Printf.eprintf "Binding %s for %s\n%!" x name ;
+          declare_local_identifier_mm envm x m in
         let envm = List.fold_left2 one_arg (return env) arg_decls args in
         let one_narg envm (x, m) =
+          if false then
+            Printf.eprintf "Binding named %s for %s\n%!" x name ;
           let*| env = envm in
           if IEnv.mem x env then return env
           else declare_local_identifier_m env x m
