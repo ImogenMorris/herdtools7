@@ -760,6 +760,12 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
             debug_event_in_rel e1 debug_event_in_rel e2)
         r
 
+    let debug_po chan po =
+      let ext(_,b) = b in
+      debug_rel chan (ext po);
+      let ext(a,_) = a in
+      debug_events chan (ext po);
+
     type event_structure = {
         procs : A.proc list ; (* will prove convenient *)
         events : EventSet.t ;        (* really a set *)
@@ -920,9 +926,16 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
     let simplify_vars_in_event soln e =
       {e with action = Act.simplify_vars_in_action soln e.action}
 
-    let simplify_vars_in_event_structure soln es =
-      if V.Solution.is_empty soln then es
-      else map_event_structure (simplify_vars_in_event soln) es
+      let simplify_vars_in_event_structure soln es =
+        (*printf "simplify_vars_in_event_structure \n %s \n"
+        (A.pp_proc (List.hd (List.tl es.procs)));
+        printf "debug_events \n";
+        debug_events stdout es.events;
+        printf "debug_po \n";
+        debug_po stdout es.po;
+        (*debug_output stdout es;*)*)
+         if V.Solution.is_empty soln then es
+         else map_event_structure (simplify_vars_in_event soln) es
 
 (********************************)
 (* Event structure manipulation *)
