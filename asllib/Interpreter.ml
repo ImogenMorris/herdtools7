@@ -88,6 +88,8 @@ module Make (B : Backend.S) (C : Config) = struct
   (*****************************************************************************)
 
   let one = B.v_of_int 1
+  let true' = E_Literal (L_Bool true) |> add_dummy_pos
+  let false' = E_Literal (L_Bool false) |> add_dummy_pos
 
   (* Return *)
   (* ------ *)
@@ -345,6 +347,18 @@ module Make (B : Backend.S) (C : Config) = struct
         | NotFound ->
           fatal_from e @@ Error.UndefinedIdentifier x |: SemanticsRule.EUndefIdent)
 
+    | E_Binop (BAND, e1, e2) ->
+        (* if e1 then e2 else false *)
+        E_Cond (e1, e2, false') |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopAnd
+
+    | E_Binop (BOR, e1, e2) ->
+       (* if e1 then true else e2 *)
+        E_Cond (e1, true', e2) |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopOr
+
+    | E_Binop (IMPL, e1, e2) ->
+        (* if e1 then e2 else true *)
+        E_Cond (e1, e2, true') |> add_pos_from e |> eval_expr env |: SemanticsRule.BinopImpl
+
     | E_Binop (op, e1, e2) ->
         let** (v1, v2), env = fold_par eval_expr env e1 e2 in
         let* v = B.binop op v1 v2 in
@@ -550,7 +564,7 @@ module Make (B : Backend.S) (C : Config) = struct
                 (* V0 first assignments promoted to local declarations *)
                 declare_local_identifier env x v
                 >>= return_normal |: SemanticsRule.LEUndefIdentV0))
-     | LE_Slice (re_bv, slices) ->
+    | LE_Slice (re_bv, slices) ->
         let*^ rm_bv, env = expr_of_lexpr re_bv |> eval_expr env in
         let*^ m_positions, env = eval_slices env slices in
         let new_m_bv =
@@ -1075,7 +1089,14 @@ module Make (B : Backend.S) (C : Config) = struct
     | T_Tuple li ->
         List.map (base_value env) li |> sync_list >>= B.create_vector
     | T_Array (e_length, ty) ->
-        let* v = base_value env ty and* length = eval_expr_sef env e_length in
+        let* v = base_value env ty in
+        let* length =
+          match e_length.desc with
+          | E_Var x when IMap.mem x env.global.static.declared_types ->
+              IMap.find x env.global.static.constants_values
+              |> B.v_of_literal |> return
+          | _ -> eval_expr_sef env e_length
+        in
         let length =
           match B.v_to_int length with
           | None -> Error.fatal_from t (Error.UnsupportedExpr e_length)
