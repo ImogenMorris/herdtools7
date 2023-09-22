@@ -773,7 +773,7 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
         po : EventSet.t * EventRel.t;
         intra_causality_data : EventRel.t ;   (* really a (partial order) relation *)
         intra_causality_control : EventRel.t ;(* really a (partial order) relation *)
-      intra_causality_order : EventRel.t ; (* Just order *)
+        intra_causality_order : EventRel.t ; (* Just order *)
         control : EventRel.t ;
         data_ports : EventSet.t ; success_ports : EventSet.t ;
         input : EventSet.t option ;
@@ -925,15 +925,9 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
 
     let simplify_vars_in_event soln e =
       {e with action = Act.simplify_vars_in_action soln e.action}
-
+(*There are predicates on events. So progorder_of could be called on events from es
+   and printed out*)
       let simplify_vars_in_event_structure soln es =
-        (*printf "simplify_vars_in_event_structure \n %s \n"
-        (A.pp_proc (List.hd (List.tl es.procs)));
-        printf "debug_events \n";
-        debug_events stdout es.events;
-        printf "debug_po \n";
-        debug_po stdout es.po;
-        (*debug_output stdout es;*)*)
          if V.Solution.is_empty soln then es
          else map_event_structure (simplify_vars_in_event soln) es
 
