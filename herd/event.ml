@@ -922,14 +922,23 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
       EventSet.fold
         (fun e k -> V.ValueSet.union (undetermined_vars_in_event e) k)
         es.events V.ValueSet.empty
+    
+
+            let rec printable_int_list l = 
+              (match l with 
+              | [] -> ""
+              | [h] -> Printf.sprintf"%d" h
+              | h :: t -> Printf.sprintf"%d, %s" h (printable_int_list t))
+            let rec print_int_list l = (Printf.printf "[%s]" (printable_int_list l))
 
     let simplify_vars_in_event soln e =
       {e with action = Act.simplify_vars_in_action soln e.action}
 (*There are predicates on events. So progorder_of could be called on events from es
    and printed out*)
       let simplify_vars_in_event_structure soln es =
+        (print_int_list es.procs;
          if V.Solution.is_empty soln then es
-         else map_event_structure (simplify_vars_in_event soln) es
+         else map_event_structure (simplify_vars_in_event soln) es)
 
 (********************************)
 (* Event structure manipulation *)
