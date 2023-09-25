@@ -17,6 +17,7 @@
 (** Operations on events *)
 
 open Printf
+open Option
 
 module type S = sig
 
@@ -716,6 +717,9 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
       fprintf chan "}" ;
       ()
 
+    let debug_events_option chan es =
+      List.iter (debug_events chan) (Option.to_list es);
+       
     module EventSetSet = MySet.Make(EventSet)
 
 (* relative to memory *)
@@ -742,6 +746,21 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
 
 (* Commits *)
     let commits_of es =  EventSet.filter is_commit es
+
+(* Debug *)
+    let debug_events_set chan ess =
+      EventSetSet.iter (debug_events chan) (ess);
+        ()
+    
+    let  debug_event_events chan e_es = 
+      (let ext(b,_) = b in
+      debug_event chan (ext e_es));
+      (let ext(_,a) = a in
+      debug_events chan (ext e_es)); 
+      ()
+
+    let  debug_aligned chan e_esL = 
+      List.iter (debug_event_events chan) e_esL
 
     module EventMap = MyMap.Make(OrderedEvent)
 
@@ -929,14 +948,49 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
               | [] -> ""
               | [h] -> Printf.sprintf"%d" h
               | h :: t -> Printf.sprintf"%d, %s" h (printable_int_list t))
-            let rec print_int_list l = (Printf.printf "[%s]" (printable_int_list l))
+            let print_int_list l = (Printf.printf "[%s]" (printable_int_list l))
 
     let simplify_vars_in_event soln e =
       {e with action = Act.simplify_vars_in_action soln e.action}
 (*There are predicates on events. So progorder_of could be called on events from es
    and printed out*)
       let simplify_vars_in_event_structure soln es =
-        (print_int_list es.procs;
+        (printf "procs \n";
+        print_int_list es.procs;
+        printf "\n events \n";
+        debug_events stdout es.events;
+        printf "\n speculated \n";
+        debug_events stdout es.speculated;
+        printf "\n po \n";
+        debug_po stdout es.po;
+        printf"\n intra_causality_data \n";
+        debug_rel stdout es.intra_causality_data;
+        printf"\n intra_causality_control \n";
+        debug_rel stdout es.intra_causality_control;
+        printf"\n intra_causality_order \n";
+        debug_rel stdout es.intra_causality_order;
+        printf"\n control \n";
+        debug_rel stdout es.control;
+        printf"\n data_ports \n";
+        debug_events stdout es.data_ports;
+        printf"\n success_ports \n";
+        debug_events stdout es.success_ports;
+        printf"\n input \n";
+        debug_events_option stdout es.input;
+        printf"\n data_input \n";
+        debug_events_option stdout es.data_input;
+        printf"\n output \n";
+        debug_events_option stdout es.output;
+        printf"\n ctrl_output \n";
+        debug_events_option stdout es.ctrl_output;
+        printf "\n sca \n";
+        debug_events_set stdout es.sca; (*We still need to verify that debug_events_set is defined correctly.*)
+        printf "\n mem_accesses \n";
+        debug_events stdout es.mem_accesses;
+        printf "\n aligned \n";
+        debug_aligned stdout es.aligned;
+        printf "\n";
+
          if V.Solution.is_empty soln then es
          else map_event_structure (simplify_vars_in_event soln) es)
 
