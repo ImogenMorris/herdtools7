@@ -954,44 +954,8 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
       {e with action = Act.simplify_vars_in_action soln e.action}
 (*There are predicates on events. So progorder_of could be called on events from es
    and printed out*)
-      let simplify_vars_in_event_structure soln es =
-        (printf "procs \n";
-        print_int_list es.procs;
-        printf "\n events \n";
-        debug_events stdout es.events;
-        printf "\n speculated \n";
-        debug_events stdout es.speculated;
-        printf "\n po \n";
-        debug_po stdout es.po;
-        printf"\n intra_causality_data \n";
-        debug_rel stdout es.intra_causality_data;
-        printf"\n intra_causality_control \n";
-        debug_rel stdout es.intra_causality_control;
-        printf"\n intra_causality_order \n";
-        debug_rel stdout es.intra_causality_order;
-        printf"\n control \n";
-        debug_rel stdout es.control;
-        printf"\n data_ports \n";
-        debug_events stdout es.data_ports;
-        printf"\n success_ports \n";
-        debug_events stdout es.success_ports;
-        printf"\n input \n";
-        debug_events_option stdout es.input;
-        printf"\n data_input \n";
-        debug_events_option stdout es.data_input;
-        printf"\n output \n";
-        debug_events_option stdout es.output;
-        printf"\n ctrl_output \n";
-        debug_events_option stdout es.ctrl_output;
-        printf "\n sca \n";
-        debug_events_set stdout es.sca; (*We still need to verify that debug_events_set is defined correctly.*)
-        printf "\n mem_accesses \n";
-        debug_events stdout es.mem_accesses;
-        printf "\n aligned \n";
-        debug_aligned stdout es.aligned;
-        printf "\n";
-
-         if V.Solution.is_empty soln then es
+      let simplify_vars_in_event_structure soln es =       
+        (if V.Solution.is_empty soln then es
          else map_event_structure (simplify_vars_in_event soln) es)
 
 (********************************)
