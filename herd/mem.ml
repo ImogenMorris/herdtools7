@@ -804,6 +804,41 @@ let match_reg_events es =
       ()
 
     let solve_regs test es csn =
+      printf "procs \n";
+      E.print_int_list es.E.procs;
+      printf "\n events \n";
+      E.debug_events stdout es.E.events;
+      printf "\n speculated \n";
+      E.debug_events stdout es.E.speculated;
+      printf "\n po \n";
+      E.debug_po stdout es.E.po;
+      printf"\n intra_causality_data \n";
+      E.debug_rel stdout es.E.intra_causality_data;
+      printf"\n intra_causality_control \n";
+      E.debug_rel stdout es.E.intra_causality_control;
+      printf"\n intra_causality_order \n";
+      E.debug_rel stdout es.E.intra_causality_order;
+      printf"\n control \n";
+      E.debug_rel stdout es.E.control;
+      printf"\n data_ports \n";
+      E.debug_events stdout es.E.data_ports;
+      printf"\n success_ports \n";
+      E.debug_events stdout es.E.success_ports;
+      printf"\n input \n";
+      E.debug_events_option stdout es.E.input;
+      printf"\n data_input \n";
+      E.debug_events_option stdout es.E.data_input;
+      printf"\n output \n";
+      E.debug_events_option stdout es.E.output;
+      printf"\n ctrl_output \n";
+      E.debug_events_option stdout es.E.ctrl_output;
+      printf "\n sca \n";
+      E.debug_events_set stdout es.E.sca; (*We still need to verify that debug_events_set is defined correctly.*)
+      printf "\n mem_accesses \n";
+      E.debug_events stdout es.E.mem_accesses;
+      printf "\n aligned \n";
+      E.debug_aligned stdout es.E.aligned;
+      printf "\n";
       let rfm = match_reg_events es in
       let csn =
         S.RFMap.fold
