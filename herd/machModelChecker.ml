@@ -213,10 +213,30 @@ module Make
               kont conc conc.S.fs (st.I.out_sets,st.I.out_show) st.I.out_flags res
             else res)
           res
-
+open Printf
     let choose_spec f1 f2 x = if do_deps then f1 x else f2 x
 (* Enter here *)
     let check_event_structure test conc kfail kont res =
+
+      printf "\n events \n";
+      S.E.debug_events stdout conc.S.str.E.events;
+      printf "\n speculated \n";
+      S.E.debug_events stdout conc.S.str.E.speculated;
+      printf"\n intra_causality_data \n";
+      S.E.debug_rel stdout conc.S.str.E.intra_causality_data;
+      printf"\n intra_causality_control \n";
+      S.E.debug_rel stdout conc.S.str.E.intra_causality_control;
+      printf"\n intra_causality_order \n";
+      S.E.debug_rel stdout conc.S.str.E.intra_causality_order;
+      printf"\n control \n";
+      S.E.debug_rel stdout conc.S.str.E.control;
+      printf"\n data_ports \n";
+      S.E.debug_events stdout conc.S.str.E.data_ports;
+      printf"\n success_ports \n";
+      S.E.debug_events stdout conc.S.str.E.success_ports;
+      printf"\n mem_accesses \n"; 
+      S.E.debug_events stdout conc.S.str.E.mem_accesses;
+      printf "\n";
       let pr = lazy (MU.make_procrels E.is_isync conc) in
       let vb_pp =
         if O.showsome && O.verbose > 0 then
