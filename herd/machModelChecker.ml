@@ -201,6 +201,7 @@ module Make
     let withco = opts.ModelOption.co
     let catdep = opts.ModelOption.catdep
     let run_interpret test  kfail =
+    (*Printf.printf "hello"; *)    (*ProjRel.debug_output stdout es;*)
       let run =  I.interpret test kfail in
       fun ks m vb_pp kont res ->
         (*Printf.eprintf "vb_pp = {%s}\n%!" (String.concat "," (List.map fst (Lazy.force vb_pp)));*)

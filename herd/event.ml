@@ -17,6 +17,7 @@
 (** Operations on events *)
 
 open Printf
+open Option
 
 module type S = sig
 
@@ -150,9 +151,14 @@ val same_instance : event -> event -> bool
 
   type event_set = EventSet.t
   val debug_events : out_channel -> event_set -> unit
+  val debug_events_option : out_channel -> event_set t -> unit
+  val debug_aligned : out_channel -> (event * event_set) list -> unit
 
   module EventSetSet : MySet.S
   with type elt = event_set
+
+  type event_set_set = EventSetSet.t
+  val debug_events_set : out_channel -> event_set_set -> unit
 
 (*************)
 (* Event map *)
@@ -200,6 +206,7 @@ val same_instance : event -> event -> bool
   type event_rel = EventRel.t
 
   val debug_rel : out_channel -> event_rel -> unit
+  val debug_po : out_channel -> event_set * event_rel -> unit
 
   type event_structure = {
       procs : A.proc list ;
@@ -264,6 +271,10 @@ val same_instance : event -> event -> bool
   val simplify_vars_in_event : A.V.solution -> event -> event
   val simplify_vars_in_event_structure :
       A.V.solution -> event_structure -> event_structure
+
+(*Imogen's debug functions*)
+  val printable_int_list: subid list -> string
+  val print_int_list : subid list -> unit
 
 (*************************************)
 (* Access to sub_components of events *)
@@ -511,6 +522,14 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
         eiid : eiid; subid : subid;
         iiid : iiid;
         action : action;  }
+      
+    let rec printable_int_list l = 
+       (match l with 
+      | [] -> ""
+      | [h] -> Printf.sprintf"%d" h
+      | h :: t -> Printf.sprintf"%d, %s" h (printable_int_list t))
+
+    let print_int_list l = (Printf.printf "[%s]" (printable_int_list l))
 
     let same_instruction e1 e2 =
       match e1.iiid,e2.iiid with
@@ -716,7 +735,11 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
       fprintf chan "}" ;
       ()
 
+    let debug_events_option chan es =
+      List.iter (debug_events chan) (Option.to_list es);
+       
     module EventSetSet = MySet.Make(EventSet)
+    type event_set_set = EventSetSet.t
 
 (* relative to memory *)
     let mem_stores_of = EventSet.filter is_mem_store
@@ -743,6 +766,21 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
 (* Commits *)
     let commits_of es =  EventSet.filter is_commit es
 
+(* Debug *)
+    let debug_events_set chan ess =
+      EventSetSet.iter (debug_events chan) (ess);
+        ()
+    
+    let  debug_event_events chan e_es = 
+      (let ext(b,_) = b in
+      debug_event chan (ext e_es));
+      (let ext(_,a) = a in
+      debug_events chan (ext e_es)); 
+      ()
+
+    let debug_aligned chan e_esL = 
+      List.iter (debug_event_events chan) e_esL
+
     module EventMap = MyMap.Make(OrderedEvent)
 
 (*************)
@@ -760,6 +798,12 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
             debug_event_in_rel e1 debug_event_in_rel e2)
         r
 
+    let debug_po chan po =
+      let ext(_,b) = b in
+      debug_rel chan (ext po);
+      let ext(a,_) = a in
+      debug_events chan (ext po);
+
     type event_structure = {
         procs : A.proc list ; (* will prove convenient *)
         events : EventSet.t ;        (* really a set *)
@@ -767,7 +811,7 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
         po : EventSet.t * EventRel.t;
         intra_causality_data : EventRel.t ;   (* really a (partial order) relation *)
         intra_causality_control : EventRel.t ;(* really a (partial order) relation *)
-      intra_causality_order : EventRel.t ; (* Just order *)
+        intra_causality_order : EventRel.t ; (* Just order *)
         control : EventRel.t ;
         data_ports : EventSet.t ; success_ports : EventSet.t ;
         input : EventSet.t option ;
@@ -916,13 +960,17 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
       EventSet.fold
         (fun e k -> V.ValueSet.union (undetermined_vars_in_event e) k)
         es.events V.ValueSet.empty
+    
+
+            
 
     let simplify_vars_in_event soln e =
       {e with action = Act.simplify_vars_in_action soln e.action}
-
-    let simplify_vars_in_event_structure soln es =
-      if V.Solution.is_empty soln then es
-      else map_event_structure (simplify_vars_in_event soln) es
+(*There are predicates on events. So progorder_of could be called on events from es
+   and printed out*)
+      let simplify_vars_in_event_structure soln es =       
+        (if V.Solution.is_empty soln then es
+         else map_event_structure (simplify_vars_in_event soln) es)
 
 (********************************)
 (* Event structure manipulation *)
