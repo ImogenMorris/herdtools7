@@ -551,6 +551,12 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
         String.make 1 (Char.chr (Char.code 'a' + e.eiid))
       else "ev"^string_of_int e.eiid
 
+      let pp_iiid e =
+        match e.iiid with
+        | IdSome i -> String.make 1 (Char.chr (Char.code '0' + i.A.proc))
+        | IdInit -> "IdInit"
+        | IdSpurious -> "IdSpurious"
+
     let  pp_instance e =
       match e.iiid with
       | IdInit -> sprintf "init(%s)" (pp_eiid e)
@@ -561,7 +567,8 @@ module Make  (C:Config) (AI:Arch_herd.S) (Act:Action.S with module A = AI) :
 
     let debug_event chan e =
       fprintf chan
-        "(eeid=%s action=%s)" (pp_eiid e) (pp_action e)
+        "(eeid=%s iiid=%s action=%s)" (pp_eiid e) (pp_iiid e) (pp_action e)
+
     let debug_event_str e =
       sprintf
         "(eeid=%s action=%s)" (pp_eiid e) (pp_action e)

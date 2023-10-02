@@ -238,6 +238,13 @@ open Printf
       printf"\n mem_accesses \n"; 
       S.E.debug_events stdout conc.S.str.E.mem_accesses;
       printf "\n";
+      printf"\n po \n"; 
+      S.E.debug_rel stdout conc.S.po;
+      printf"\n pos \n"; 
+      S.E.debug_rel stdout conc.S.pos;
+      printf"\n pco \n"; 
+      S.E.debug_rel stdout conc.S.pco;
+      printf "\n";
       let pr = lazy (MU.make_procrels E.is_isync conc) in
       let vb_pp =
         if O.showsome && O.verbose > 0 then
