@@ -218,7 +218,7 @@ open Printf
     let choose_spec f1 f2 x = if do_deps then f1 x else f2 x
 (* Enter here *)
     let check_event_structure test conc kfail kont res =
-
+      printf "\n event_structure";
       printf "\n events \n";
       S.E.debug_events stdout conc.S.str.E.events;
       printf "\n speculated \n";
@@ -235,15 +235,28 @@ open Printf
       S.E.debug_events stdout conc.S.str.E.data_ports;
       printf"\n success_ports \n";
       S.E.debug_events stdout conc.S.str.E.success_ports;
+      printf"\n input \n";
+      S.E.debug_events_option stdout conc.S.str.E.input;
       printf"\n mem_accesses \n"; 
       S.E.debug_events stdout conc.S.str.E.mem_accesses;
       printf "\n";
+      printf "\n concrete";
+      printf"\n rfmap \n"; 
+      (*printf "%a" S.RFMap.pp conc.S.rfmap (*attempt at printing with abstract types*)*)
       printf"\n po \n"; 
       S.E.debug_rel stdout conc.S.po;
       printf"\n pos \n"; 
       S.E.debug_rel stdout conc.S.pos;
       printf"\n pco \n"; 
       S.E.debug_rel stdout conc.S.pco;
+      printf"\n store_load_vbf \n";
+      S.E.debug_rel stdout conc.S.store_load_vbf;
+      printf"\n init_load_vbf \n";
+      S.E.debug_rel stdout conc.S.init_load_vbf;
+      printf"\n last_store_vbf \n";
+      S.E.debug_rel stdout conc.S.last_store_vbf;
+      printf"\n atomic_load_store \n";
+      S.E.debug_rel stdout conc.S.atomic_load_store;
       printf "\n";
       let pr = lazy (MU.make_procrels E.is_isync conc) in
       let vb_pp =

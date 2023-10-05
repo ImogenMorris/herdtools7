@@ -419,7 +419,7 @@ module Make(C:Config) (A:Arch_herd.S) (Act:Action.S with module A = A)
           if not !first then output_string chan delim
           else first := false ;
           pp chan wt rf)
-        rfm
+        rfm   
 
     let for_all_in_rfmap pred rfm =
       RFMap.fold
