@@ -219,8 +219,12 @@ open Printf
 (* Enter here *)
     let check_event_structure test conc kfail kont res =
       printf "\n event_structure";
+      printf "procs \n";
+      S.E.print_int_list conc.S.str.E.procs;
       printf "\n events \n";
       S.E.debug_events stdout conc.S.str.E.events;
+      printf "\n po \n";
+      S.E.debug_po stdout conc.S.str.E.po;
       printf "\n speculated \n";
       S.E.debug_events stdout conc.S.str.E.speculated;
       printf"\n intra_causality_data \n";
@@ -237,8 +241,18 @@ open Printf
       S.E.debug_events stdout conc.S.str.E.success_ports;
       printf"\n input \n";
       S.E.debug_events_option stdout conc.S.str.E.input;
+      printf"\n data_input \n";
+      S.E.debug_events_option stdout conc.S.str.E.data_input;
+      printf"\n output \n";
+      S.E.debug_events_option stdout conc.S.str.E.output;
+      printf"\n ctrl_output \n";
+      S.E.debug_events_option stdout conc.S.str.E.ctrl_output;
+      printf "\n sca \n";
+      S.E.debug_events_set stdout conc.S.str.E.sca; 
       printf"\n mem_accesses \n"; 
       S.E.debug_events stdout conc.S.str.E.mem_accesses;
+      printf "\n aligned \n";
+      S.E.debug_aligned stdout conc.S.str.E.aligned;
       printf "\n";
       printf "\n concrete";
       printf"\n rfmap \n"; 
