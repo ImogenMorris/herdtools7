@@ -195,31 +195,24 @@ module Make
              let k = bd::k in
              k)
            annots [])
-
+open Printf
 (* Intepreter call *)
     let (opts,_,prog) = O.m
     let withco = opts.ModelOption.co
     let catdep = opts.ModelOption.catdep
-    let run_interpret test  kfail =
-    (*Printf.printf "hello"; *)    (*ProjRel.debug_output stdout es;*)
+    let run_interpret test  kfail = (*Printf.printf"run_interpret";*)
+  (*ProjRel.debug_output stdout es;*)
       let run =  I.interpret test kfail in
       fun ks m vb_pp kont res ->
         (*Printf.eprintf "vb_pp = {%s}\n%!" (String.concat "," (List.map fst (Lazy.force vb_pp)));*)
-        run ks m vb_pp
-          (fun st res ->
-            if
-              not O.strictskip || StringSet.equal st.I.out_skipped O.skipchecks
-            then
-              let conc = ks.I.conc in
-              kont conc conc.S.fs (st.I.out_sets,st.I.out_show) st.I.out_flags res
-            else res)
-          res
-open Printf
-    let choose_spec f1 f2 x = if do_deps then f1 x else f2 x
-(* Enter here *)
-    let check_event_structure test conc kfail kont res =
+                          
+          (*  BellModel.pp_info  out_bell_info.i;*)
+          let conc = ks.I.conc in
+      printf "\n ks \n";
+      printf "\n po \n";               
+      S.E.debug_rel stdout ks.I.po;
       printf "\n event_structure";
-      printf "procs \n";
+      printf "\n procs \n";
       S.E.print_int_list conc.S.str.E.procs;
       printf "\n events \n";
       S.E.debug_events stdout conc.S.str.E.events;
@@ -257,6 +250,7 @@ open Printf
       printf "\n concrete";
       printf"\n rfmap \n"; 
       (*printf "%a" S.RFMap.pp conc.S.rfmap (*attempt at printing with abstract types*)*)
+     (* S.pp_rfmap stdout "" fn_rfmap_print rfmap ;*)
       printf"\n po \n"; 
       S.E.debug_rel stdout conc.S.po;
       printf"\n pos \n"; 
@@ -272,6 +266,19 @@ open Printf
       printf"\n atomic_load_store \n";
       S.E.debug_rel stdout conc.S.atomic_load_store;
       printf "\n";
+        run ks m vb_pp
+          (fun st res ->
+            if
+              not O.strictskip || StringSet.equal st.I.out_skipped O.skipchecks
+            then
+              let conc = ks.I.conc in
+              kont conc conc.S.fs (st.I.out_sets,st.I.out_show) st.I.out_flags res
+            else res)
+          res
+open Printf
+    let choose_spec f1 f2 x = if do_deps then f1 x else f2 x
+(* Enter here *)
+    let check_event_structure test conc kfail kont res =
       let pr = lazy (MU.make_procrels E.is_isync conc) in
       let vb_pp =
         if O.showsome && O.verbose > 0 then

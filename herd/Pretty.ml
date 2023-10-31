@@ -1443,6 +1443,8 @@ module Make (S:SemExtra.S) : S with module S = S  = struct
     let vbss = pp_event_structure chan vbss es in
 
     pl "/* the rfmap edges */" ;
+
+    
     let show_ref_rel = List.exists (fun (lab,_) -> lab = "rf") vbss in
     S.pp_rfmap chan ""
       (fun chan wt rf -> match wt,rf with
@@ -1494,6 +1496,32 @@ module Make (S:SemExtra.S) : S with module S = S  = struct
       vbss ;
     dump_pairs chan ;
     pl "}"
+
+ (* (*Imogen's definition extracting the lambda function from the application of pp_rfmap and giving it a name*)
+  let vbss = Make(S:SemExtra.S).pp_event_structure chan vbss es in
+    let show_ref_rel = List.exists (fun (lab,_) -> lab = "rf") vbss in
+    let fn_print_rfmap = (fun chan wt rf -> match wt,rf with
+    | S.Load er,S.Store ew ->
+        if not show_ref_rel then
+          pp_edge chan
+            (pp_node_eiid ew)
+            (pp_node_eiid er)
+            "rf"
+            (last_thread ew er || is_up ew er || is_back ew er)
+            (is_even ew er)
+    | S.Final _,S.Store ew ->
+        if PC.showfinalrf then
+          let final_id = "final"^pp_node_eiid ew in
+          pp_none chan final_id (pp_final_rf_position ew);
+          pp_edge chan  (pp_node_eiid ew) final_id "rf" false false
+        else ()
+    | S.Load er,S.Init ->
+        if PC.showinitrf then begin
+          let init_id = "init"^pp_node_eiid er in
+          pp_point chan init_id "rf" (pp_init_rf_position er);
+          pp_edge chan init_id (pp_node_eiid er) "rf" false false
+        end
+    | S.Final _,S.Init -> ());*)
 
 (*********************************************)
 (* get rid of register events before dumping *)

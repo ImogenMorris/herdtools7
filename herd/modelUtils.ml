@@ -43,6 +43,7 @@ module Make(O:Model.Config) (S:SemExtra.S) = struct
     (is_mem_kvm e && E.is_load e) || E.is_additional_mem_load e
   let is_load_total e = E.is_load e || E.is_additional_mem_load e
 
+  open Printf
   let make_procrels_deps conc =
     let iico =
       E.EventRel.union
@@ -72,7 +73,7 @@ module Make(O:Model.Config) (S:SemExtra.S) = struct
     { S.addr; data; ctrl; depend; ctrlisync; data_commit;
       success; rf; tst=e;},iico,dd_inside
 
-  let make_procrels_nodeps is_isync conc =
+  let make_procrels_nodeps is_isync conc = 
     let pr0,iico,dd_inside = make_procrels_deps conc in
     let is_data_port =
       let data_ports = conc.S.str.E.data_ports in

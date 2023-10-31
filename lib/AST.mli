@@ -17,6 +17,7 @@
 (** Syntax tree of model definitions *)
 
 type loc =  { pos:int; len:int;}
+
 type pos =  Pos of loc | Txt of string
 
 type set_or_rln = SET | RLN
