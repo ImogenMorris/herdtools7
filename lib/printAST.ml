@@ -80,16 +80,20 @@ let rec string_of_exp e =
   | Op1 (t, op1, exp) -> "Op1 (" ^ string_of_txtLoc_t t ^ (string_of_op1 op1) ^ (string_of_exp exp) ^ ")"
   | Op (t, op2, exp_list) -> "Op (" ^ string_of_txtLoc_t t ^ 
                  (string_of_op2 op2) ^ String.concat " " ((List.map string_of_exp) exp_list) ^ ")"
-  | App (t, exp, exp) -> 
-
-(*
-  | App of  TxtLoc.t * exp * exp
-  | Bind  of  TxtLoc.t * binding list * exp
-  | BindRec  of  TxtLoc.t * binding list * exp
-  | Fun of  TxtLoc.t * pat * exp *
-        var (* name *) * varset (* free vars *)
-  | ExplicitSet of TxtLoc.t * exp list
-  | Match of TxtLoc.t * exp * clause list * exp option
+  | App (t, exp1, exp2) -> "App (" ^ string_of_txtLoc_t t ^ 
+                 (string_of_exp exp1) ^ (string_of_exp exp2) ^ ")"
+  | Bind (t, binding_list, exp) -> "Bind (" ^ string_of_txtLoc_t t ^ 
+  String.concat " " ((List.map string_of_binding) binding_list) ^ (string_of_exp exp) ^ ")" (*string_of_binding defined below*)
+  | BindRec (t, binding_list, exp) -> "BindRec (" ^ string_of_txtLoc_t t ^ 
+  String.concat " " ((List.map string_of_binding) binding_list) ^ (string_of_exp exp) ^ ")" 
+  | Fun (t, pat, exp, var, varset) -> "Fun (" ^ string_of_txtLoc_t t ^ 
+  string_of_pat pat ^ (string_of_exp exp) ^ var ^ (string_of_varset varset) ^ ")" 
+  | ExplicitSet (t, exp_list) -> "ExplicitSet (" ^ string_of_txtLoc_t t ^ 
+   String.concat " " ((List.map string_of_exp) exp_list) ^ ")"
+  | Match (t, exp, clause_list, exp_option) -> "Match (" ^ string_of_txtLoc_t t ^ (string_of_exp exp) ^ 
+  String.concat " " ((List.map string_of_clause) clause_list) ^ string_of_exp (Option.get exp_option) ^ ")"
+  | MatchSet (t, exp1, exp2, set_clause) -> 
+  (*
   | MatchSet of TxtLoc.t * exp * exp * set_clause
   | Try of TxtLoc.t * exp * exp
   | If of TxtLoc.t * cond * exp * exp
