@@ -4,7 +4,7 @@ let string_of_loc l = "{pos "^ (string_of_int l.pos) ^  "; len " ^ (string_of_in
 
 let string_of_pos p = 
   match p with
-  | Pos loc -> "(POS " ^ (loc loc) ^ ")"
+  | Pos loc -> "(POS " ^ (string_of_loc loc) ^ ")"
   | Txt string -> "(Txt " ^ string ^ ")"
 
 let string_of_set_or_rln sor =
@@ -40,7 +40,7 @@ let string_of_konst k =
   type tag = string*)
 
 
-  type varset = StringSet.t
+(*  type varset = StringSet.t*) (*t is just a string so does it matter?*)
 
 let string_of_scope s =
   match s with 
@@ -55,12 +55,10 @@ let string_of_position p =
    "; pos_bol " ^ (string_of_int p.Lexing.pos_bol) ^ "; pos_cnum " ^ (string_of_int p.Lexing.pos_cnum) ^ ";}"
 
 let string_of_txtLoc_t t =
-  "{loc_start " ^ (string_of_position t.txtLoc.loc_start) ^ "; loc_end " ^ (string_of_position t.txtLoc.loc_end) ^
-   "; loc_ghost" ^ string_of_bool t.txtLoc.loc_ghost ^ ";}"
+  "{loc_start " ^ (string_of_position t.TxtLoc.loc_start) ^ "; loc_end " ^ (string_of_position t.TxtLoc.loc_end) ^
+   "; loc_ghost" ^ string_of_bool t.TxtLoc.loc_ghost ^ ";}"
 
-   
-
-   type position = {
+(*   type position = {
     pos_fname : string;
     pos_lnum : int;
     pos_bol : int;
@@ -71,15 +69,20 @@ let string_of_txtLoc_t t =
       loc_start : Lexing.position ;
       loc_end : Lexing.position ;
       loc_ghost : bool ;
-      }
+      }*)
+
   
-let exp e =
+let rec string_of_exp e =
   match e with
-  | Konst of TxtLoc.t * konst -> "(" ^ (konst konst) ^ ")"
-  | Tag of TxtLoc.t * tag
-  | Var of TxtLoc.t * var
-  | Op1 of  TxtLoc.t * op1 * exp
-  | Op of  TxtLoc.t * op2 * exp list
+  | Konst (t, konst) -> "Konst (" ^ (string_of_txtLoc_t t) ^ (string_of_konst konst) ^ ")"
+  | Tag (t, tag) -> "Tag (" ^ (string_of_txtLoc_t t) ^ tag ^ ")"
+  | Var (t, var) -> "Var (" ^ (string_of_txtLoc_t t) ^ var ^ ")"
+  | Op1 (t, op1, exp) -> "Op1 (" ^ string_of_txtLoc_t t ^ (string_of_op1 op1) ^ (string_of_exp exp) ^ ")"
+  | Op (t, op2, exp_list) -> "Op (" ^ string_of_txtLoc_t t ^ 
+                 (string_of_op2 op2) ^ String.concat " " ((List.map string_of_exp) exp_list) ^ ")"
+  | App (t, exp, exp) -> 
+
+(*
   | App of  TxtLoc.t * exp * exp
   | Bind  of  TxtLoc.t * binding list * exp
   | BindRec  of  TxtLoc.t * binding list * exp
@@ -154,7 +157,7 @@ and set_clause =
   
   and clause = string * exp
   
-  and binding = TxtLoc.t * pat * exp
+  and binding = TxtLoc.t * pat * exp*)
   
   type do_test = Acyclic | Irreflexive | TestEmpty
   type test = Yes of do_test | No of do_test
