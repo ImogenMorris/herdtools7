@@ -207,7 +207,7 @@ open Printf
         (*Printf.eprintf "vb_pp = {%s}\n%!" (String.concat "," (List.map fst (Lazy.force vb_pp)));*)
                           
           (*  BellModel.pp_info  out_bell_info.i;*)
-          let conc = ks.I.conc in
+    (*    let conc = ks.I.conc in
       printf "\n ks \n";
       printf "\n po \n";               
       S.E.debug_rel stdout ks.I.po;
@@ -265,7 +265,7 @@ open Printf
       S.E.debug_rel stdout conc.S.last_store_vbf;
       printf"\n atomic_load_store \n";
       S.E.debug_rel stdout conc.S.atomic_load_store;
-      printf "\n";
+      printf "\n";*)
         run ks m vb_pp
           (fun st res ->
             if

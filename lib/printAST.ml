@@ -71,6 +71,7 @@ let string_of_txtLoc_t t =
       loc_ghost : bool ;
       }*)
 
+let string_of_varset v = String.concat " " (StringSet.elements v)
   
 let rec string_of_exp e =
   match e with
@@ -92,33 +93,47 @@ let rec string_of_exp e =
    String.concat " " ((List.map string_of_exp) exp_list) ^ ")"
   | Match (t, exp, clause_list, exp_option) -> "Match (" ^ string_of_txtLoc_t t ^ (string_of_exp exp) ^ 
   String.concat " " ((List.map string_of_clause) clause_list) ^ string_of_exp (Option.get exp_option) ^ ")"
-  | MatchSet (t, exp1, exp2, set_clause) -> 
-  (*
-  | MatchSet of TxtLoc.t * exp * exp * set_clause
-  | Try of TxtLoc.t * exp * exp
-  | If of TxtLoc.t * cond * exp * exp
+  | MatchSet (t, exp1, exp2, set_clause) -> "MatchSet (" ^ string_of_txtLoc_t t ^ (string_of_exp exp1) ^ 
+  (string_of_exp exp2) ^
+  (string_of_set_clause set_clause) ^ ")"
+  | Try (t, exp1, exp2) -> "Try (" ^ string_of_txtLoc_t t ^ (string_of_exp exp1) ^ (string_of_exp exp2) ^ ")"
+  | If (t, cond, exp1, exp2) -> "If (" ^ string_of_cond cond
+   ^ string_of_txtLoc_t t ^ (string_of_exp exp1) ^ (string_of_exp exp2) ^ ")"
 
-  
-and set_clause =
-  | EltRem of pat0 * pat0 * exp
-  | PreEltPost of pat0 * pat0 * pat0 * exp
-  
-  
-  and pat = Pvar of pat0 | Ptuple of pat0 list
-  
-  and pat0 = var option
-  
-  and variant_cond =
-    | Variant of string
-    | OpNot of variant_cond
-    | OpAnd of variant_cond * variant_cond
-    | OpOr of variant_cond * variant_cond
-  
-  and cond =
-  | Eq of exp * exp | Subset of exp * exp | In of exp * exp
-  | VariantCond of variant_cond
-  
-  and clause = string * exp
+  and string_of_set_clause sc =
+  match sc with
+   | EltRem (pat01, pat02, exp) -> "EltRem (" ^ string_of_pat0 pat01 
+   ^ string_of_pat0 pat02 ^ (string_of_exp exp) ^ ")"
+   | PreEltPost (pat01, pat02, pat03, exp) -> "PreEltPost (" ^ string_of_pat0 pat01 
+   ^ string_of_pat0 pat02 ^ string_of_pat0 pat03 ^ (string_of_exp exp) ^ ")"
+
+  and string_of_pat p = 
+  match p with
+    | Pvar pat0 -> "Pvar (" ^ string_of_pat0 pat0 ^ ")"
+    | Ptuple pat0_list -> "Ptuple (" ^ String.concat " " ((List.map string_of_pat0) pat0_list) ^ ")"
+
+  and string_of_pat0 p = Option.get p
+
+  and string_of_variant_cond vc =
+  match vc with
+    | Variant string -> "Variant (" ^ string ^ ")"
+    | OpNot variant_cond -> "OpNot (" ^ string_of_variant_cond variant_cond ^ ")"
+    | OpAnd (variant_cond1, variant_cond2) -> "OpAnd (" ^ string_of_variant_cond variant_cond1 ^ string_of_variant_cond variant_cond2 ^ ")"
+    | OpOr (variant_cond1, variant_cond2) -> "OpOr (" ^ string_of_variant_cond variant_cond1 ^ string_of_variant_cond variant_cond2 ^ ")"
+    
+  and string_of_cond c =
+  match c with 
+    | Eq (exp1, exp2) -> "Eq (" ^ (string_of_exp exp1) ^ (string_of_exp exp2) ^ ")"
+    | Subset (exp1, exp2) -> "Subset (" ^ (string_of_exp exp1) ^ (string_of_exp exp2) ^ ")"
+    | In (exp1, exp2) ->  "In (" ^ (string_of_exp exp1) ^ (string_of_exp exp2) ^ ")"
+    | VariantCond variant_cond -> "VariantCond (" ^ string_of_variant_cond variant_cond ^ ")"
+
+  and string_of_clause (string, exp) = string ^ (string_of_exp exp)
+
+  and string_of_binding (t, pat, exp) = string_of_txtLoc_t t ^ string_of_pat pat ^ string_of_exp exp
+
+let print_exp exp = Printf.printf "%s" (string_of_exp exp)
+  (*
   
   and binding = TxtLoc.t * pat * exp
   
@@ -163,7 +178,7 @@ and set_clause =
   
   and binding = TxtLoc.t * pat * exp*)
   
-  type do_test = Acyclic | Irreflexive | TestEmpty
+  (*type do_test = Acyclic | Irreflexive | TestEmpty
   type test = Yes of do_test | No of do_test
   type test_type = Flagged | UndefinedUnless | Check | Assert
   type app_test = TxtLoc.t * pos * test * exp * string option
@@ -194,4 +209,4 @@ and set_clause =
   
   
   (** Name X model definition *)
-  type t = ModelOption.t * string * ins list
+  type t = ModelOption.t * string * ins list*)
