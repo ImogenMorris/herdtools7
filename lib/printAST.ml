@@ -84,9 +84,9 @@ let rec string_of_exp e =
   | App (t, exp1, exp2) -> "App (" ^ string_of_txtLoc_t t ^ 
                  (string_of_exp exp1) ^ (string_of_exp exp2) ^ ")"
   | Bind (t, binding_list, exp) -> "Bind (" ^ string_of_txtLoc_t t ^ 
-  String.concat " " ((List.map string_of_binding) binding_list) ^ (string_of_exp exp) ^ ")" (*string_of_binding defined below*)
+  string_of_binding_list binding_list ^ (string_of_exp exp) ^ ")" (*string_of_binding defined below*)
   | BindRec (t, binding_list, exp) -> "BindRec (" ^ string_of_txtLoc_t t ^ 
-  String.concat " " ((List.map string_of_binding) binding_list) ^ (string_of_exp exp) ^ ")" 
+  string_of_binding_list binding_list ^ (string_of_exp exp) ^ ")" 
   | Fun (t, pat, exp, var, varset) -> "Fun (" ^ string_of_txtLoc_t t ^ 
   string_of_pat pat ^ (string_of_exp exp) ^ var ^ (string_of_varset varset) ^ ")" 
   | ExplicitSet (t, exp_list) -> "ExplicitSet (" ^ string_of_txtLoc_t t ^ 
@@ -132,58 +132,59 @@ let rec string_of_exp e =
 
   and string_of_binding (t, pat, exp) = string_of_txtLoc_t t ^ string_of_pat pat ^ string_of_exp exp
 
+  and string_of_binding_list binding_list = String.concat " " ((List.map string_of_binding) binding_list)
+
 let print_exp exp = Printf.printf "%s" (string_of_exp exp)
+
+let string_of_do_test dt = 
+  match dt with
+    | Acyclic -> "Acyclic"
+    | Irreflexive -> "Irreflexive"
+    | TestEmpty -> "TestEmpty"
+
+let string_of_test t = 
+  match t with
+  | Yes do_test -> "Yes (" ^ (string_of_do_test do_test) ^ ")"
+  | No do_test -> "No (" ^ (string_of_do_test do_test) ^ ")"
+
+let string_of_test_type tt = 
+  match tt with
+  | Flagged -> "Flagged"
+  | UndefinedUnless -> "UndefinedUnless"
+  | Check -> "Check"
+  | Assert -> "Assert"
+  
+let string_of_app_test (t, pos, test, exp, string_op) = 
+    string_of_txtLoc_t t ^ string_of_pos pos ^ string_of_test test ^ string_of_exp exp 
+    ^ Option.get string_op
+
+let string_of_is_rec r = 
+  match r with 
+  | IsRec -> "IsRec"
+  | IsNotRec -> "IsNotRec"
+
+let string_of_ins i =
+  match i with
+    | Let (t, binding_list) -> "Let (" ^ string_of_txtLoc_t t ^ string_of_binding_list binding_list ^ ")"
+    | Rec (t, binding_list, app_test_option) -> "Rec (" ^ string_of_txtLoc_t t ^ 
+    (string_of_binding_list binding_list) ^ (Option.get app_test_option |> string_of_app_test) ^ ")"
+    | InsMatch (t, exp, insclause_list, ins_list_option)  -> "InsMatch (" ^ string_of_txtLoc_t t
+     ^ string_of_exp exp ^ String.concat " " ((List.map string_of_insclause) insclause_list) 
+     ^ (Option.get ins_list_option |> string_of_ins_list) ")"
+    | Test (app_test, test_type) -> "Test (" ^ string_of_app_test app_test ^ string_of_test_type test_type ")"
+    | UnShow (t, string_list) -> "UnShow (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Show (t, string_list) -> "Show (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | ShowAs (t, exp, string) -> "ShowAs (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Include (t, string) -> "Include (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Procedure (t, var, pat, ins list, is_rec) -> "Procedure (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Call (t, var, exp, string option) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Enum (t, var, tag list) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Forall (t, var, exp, ins list) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Debug (t, exp) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | WithFrom (t, var, exp) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | Events (t, var, exp list, bool) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | IfVariant (t, variant_cond, ins list, ins list) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
   (*
-  
-  and binding = TxtLoc.t * pat * exp
-  
-  
-  type exp =
-    | Konst of  TxtLoc.t * konst
-    | Tag of TxtLoc.t * tag
-    | Var of TxtLoc.t * var
-    | Op1 of  TxtLoc.t * op1 * exp
-    | Op of  TxtLoc.t * op2 * exp list
-    | App of  TxtLoc.t * exp * exp
-    | Bind  of  TxtLoc.t * binding list * exp
-    | BindRec  of  TxtLoc.t * binding list * exp
-    | Fun of  TxtLoc.t * pat * exp *
-          var (* name *) * varset (* free vars *)
-    | ExplicitSet of TxtLoc.t * exp list
-    | Match of TxtLoc.t * exp * clause list * exp option
-    | MatchSet of TxtLoc.t * exp * exp * set_clause
-    | Try of TxtLoc.t * exp * exp
-    | If of TxtLoc.t * cond * exp * exp
-  
-  and set_clause =
-    | EltRem of pat0 * pat0 * exp
-    | PreEltPost of pat0 * pat0 * pat0 * exp
-  
-  
-  and pat = Pvar of pat0 | Ptuple of pat0 list
-  
-  and pat0 = var option
-  
-  and variant_cond =
-    | Variant of string
-    | OpNot of variant_cond
-    | OpAnd of variant_cond * variant_cond
-    | OpOr of variant_cond * variant_cond
-  
-  and cond =
-  | Eq of exp * exp | Subset of exp * exp | In of exp * exp
-  | VariantCond of variant_cond
-  
-  and clause = string * exp
-  
-  and binding = TxtLoc.t * pat * exp*)
-  
-  (*type do_test = Acyclic | Irreflexive | TestEmpty
-  type test = Yes of do_test | No of do_test
-  type test_type = Flagged | UndefinedUnless | Check | Assert
-  type app_test = TxtLoc.t * pos * test * exp * string option
-  type is_rec = IsRec | IsNotRec
-  
   type ins =
     | Let of TxtLoc.t * binding list
     | Rec of  TxtLoc.t * binding list * app_test option

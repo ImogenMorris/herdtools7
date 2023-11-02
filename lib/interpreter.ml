@@ -1853,6 +1853,7 @@ module Make
 
 (* Recursive functions *)
       and env_rec_funs env_bd _loc bds =
+        List.iter (function bd -> PrintAST.print_exp (snd bd); Printf.printf "\n") bds ;
         let env = env_bd.EV.env in
         let clos =
           List.map
