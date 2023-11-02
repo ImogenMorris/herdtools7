@@ -163,7 +163,7 @@ let string_of_is_rec r =
   | IsRec -> "IsRec"
   | IsNotRec -> "IsNotRec"
 
-let string_of_ins i =
+let rec string_of_ins i =
   match i with
     | Let (t, binding_list) -> "Let (" ^ string_of_txtLoc_t t ^ string_of_binding_list binding_list ^ ")"
     | Rec (t, binding_list, app_test_option) -> "Rec (" ^ string_of_txtLoc_t t ^ 
@@ -172,18 +172,24 @@ let string_of_ins i =
      ^ string_of_exp exp ^ String.concat " " ((List.map string_of_insclause) insclause_list) 
      ^ (Option.get ins_list_option |> string_of_ins_list) ")"
     | Test (app_test, test_type) -> "Test (" ^ string_of_app_test app_test ^ string_of_test_type test_type ")"
-    | UnShow (t, string_list) -> "UnShow (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Show (t, string_list) -> "Show (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | ShowAs (t, exp, string) -> "ShowAs (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Include (t, string) -> "Include (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Procedure (t, var, pat, ins list, is_rec) -> "Procedure (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Call (t, var, exp, string option) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Enum (t, var, tag list) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Forall (t, var, exp, ins list) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Debug (t, exp) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | WithFrom (t, var, exp) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | Events (t, var, exp list, bool) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
-    | IfVariant (t, variant_cond, ins list, ins list) -> " (" ^ string_of_txtLoc_t t ^  ^ ")"
+    | UnShow (t, string_list) -> "UnShow (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
+    | Show (t, string_list) -> "Show (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
+    | ShowAs (t, exp, string) -> "ShowAs (" ^ string_of_txtLoc_t t ^ string_of_exp exp ^ string ^ ")"
+    | Include (t, string) -> "Include (" ^ string_of_txtLoc_t t ^ string ^ ")"
+    | Procedure (t, var, pat, ins_list, is_rec) -> "Procedure (" ^ string_of_txtLoc_t t ^ var 
+    ^ string_of_pat pat ^ string_of_ins_list ins_list ")"
+    | Call (t, var, exp, string_option) -> " (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
+    ^ Option.get string_option ^ ")"
+    | Enum (t, var, tag_list) -> " (" ^ string_of_txtLoc_t t ^ var 
+    ^ String.concat " " ((List.map string_of_tag) tag_list) ^ ")"
+    | Forall (t, var, exp, ins_list) -> " (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
+    ^ string_of_ins_list ins_list ^ ")"
+    | Debug (t, exp) -> " (" ^ string_of_txtLoc_t t ^ string_of_exp exp ^ ")"
+    | WithFrom (t, var, exp) -> " (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp ^ ")"
+    | Events (t, var, exp_list, bool) -> " (" ^ string_of_txtLoc_t t 
+    ^ String.concat " " ((List.map string_of_exp) exp_list) ^ string_of_bool bool ^ ")"
+    | IfVariant (t, variant_cond, ins_list1, ins_list2) -> " (" ^ string_of_txtLoc_t t ^ string_of_variant_cond variant_cond 
+    ^ string_of_ins_list ins_list1 ^ string_of_ins_list ins_list2 ^ ")"
   (*
   type ins =
     | Let of TxtLoc.t * binding list
