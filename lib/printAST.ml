@@ -170,14 +170,14 @@ let rec string_of_ins i =
     (string_of_binding_list binding_list) ^ (Option.get app_test_option |> string_of_app_test) ^ ")"
     | InsMatch (t, exp, insclause_list, ins_list_option)  -> "InsMatch (" ^ string_of_txtLoc_t t
      ^ string_of_exp exp ^ String.concat " " ((List.map string_of_insclause) insclause_list) 
-     ^ (Option.get ins_list_option |> string_of_ins_list) ")"
-    | Test (app_test, test_type) -> "Test (" ^ string_of_app_test app_test ^ string_of_test_type test_type ")"
+     ^ (Option.get ins_list_option |> string_of_ins_list) ^ ")"
+    | Test (app_test, test_type) -> "Test (" ^ string_of_app_test app_test ^ string_of_test_type test_type ^ ")"
     | UnShow (t, string_list) -> "UnShow (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
     | Show (t, string_list) -> "Show (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
     | ShowAs (t, exp, string) -> "ShowAs (" ^ string_of_txtLoc_t t ^ string_of_exp exp ^ string ^ ")"
     | Include (t, string) -> "Include (" ^ string_of_txtLoc_t t ^ string ^ ")"
     | Procedure (t, var, pat, ins_list, is_rec) -> "Procedure (" ^ string_of_txtLoc_t t ^ var 
-    ^ string_of_pat pat ^ string_of_ins_list ins_list ")"
+    ^ string_of_pat pat ^ string_of_ins_list ins_list ^ string_of_is_rec is_rec ^ ")"
     | Call (t, var, exp, string_option) -> " (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
     ^ Option.get string_option ^ ")"
     | Enum (t, var, tag_list) -> " (" ^ string_of_txtLoc_t t ^ var 
@@ -190,6 +190,10 @@ let rec string_of_ins i =
     ^ String.concat " " ((List.map string_of_exp) exp_list) ^ string_of_bool bool ^ ")"
     | IfVariant (t, variant_cond, ins_list1, ins_list2) -> " (" ^ string_of_txtLoc_t t ^ string_of_variant_cond variant_cond 
     ^ string_of_ins_list ins_list1 ^ string_of_ins_list ins_list2 ^ ")"
+
+    and string_of_ins_list il = String.concat " " ((List.map string_of_ins) il)
+
+    and string_of_insclause (string, ins_list) = string ^ string_of_ins_list ins_list
   (*
   type ins =
     | Let of TxtLoc.t * binding list
