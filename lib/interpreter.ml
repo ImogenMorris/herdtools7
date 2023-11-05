@@ -174,6 +174,7 @@ module Make
 (*  Model interpret *)
     let (_,_,mprog) = O.m
 
+    let () = PrintAST.print_t O.m
 (* Debug printing *)
 
     let _debug_proc chan p = fprintf chan "%i" p
@@ -1853,7 +1854,7 @@ module Make
 
 (* Recursive functions *)
       and env_rec_funs env_bd _loc bds =
-        List.iter (function bd -> PrintAST.print_exp (snd bd); Printf.printf "\n") bds ;
+       (* List.iter (function bd -> PrintAST.print_exp (snd bd); Printf.printf "\n") bds ;*)
         let env = env_bd.EV.env in
         let clos =
           List.map

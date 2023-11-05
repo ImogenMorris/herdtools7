@@ -50,13 +50,13 @@ let string_of_scope s =
     | Sub_Group -> "Sub_Group"
     | Work_Item -> "Work_Item"
 
-let string_of_position p =
-  "{pos_fname " ^ p.Lexing.pos_fname ^ "; pos_lnum " ^ (string_of_int p.Lexing.pos_lnum) ^
+let string_of_position p =  "{pos_fname " ^ p.Lexing.pos_fname ^ "; pos_lnum " ^ (string_of_int p.Lexing.pos_lnum) ^
    "; pos_bol " ^ (string_of_int p.Lexing.pos_bol) ^ "; pos_cnum " ^ (string_of_int p.Lexing.pos_cnum) ^ ";}"
 
-let string_of_txtLoc_t t =
+let string_of_txtLoc_t t = " tLoc "
+  (*
   "{loc_start " ^ (string_of_position t.TxtLoc.loc_start) ^ "; loc_end " ^ (string_of_position t.TxtLoc.loc_end) ^
-   "; loc_ghost" ^ string_of_bool t.TxtLoc.loc_ghost ^ ";}"
+   "; loc_ghost" ^ string_of_bool t.TxtLoc.loc_ghost ^ ";}"*)
 
 (*   type position = {
     pos_fname : string;
@@ -92,7 +92,7 @@ let rec string_of_exp e =
   | ExplicitSet (t, exp_list) -> "ExplicitSet (" ^ string_of_txtLoc_t t ^ 
    String.concat " " ((List.map string_of_exp) exp_list) ^ ")"
   | Match (t, exp, clause_list, exp_option) -> "Match (" ^ string_of_txtLoc_t t ^ (string_of_exp exp) ^ 
-  String.concat " " ((List.map string_of_clause) clause_list) ^ string_of_exp (Option.get exp_option) ^ ")"
+  String.concat " " ((List.map string_of_clause) clause_list) ^ string_of_exp (Option.value exp_option) ^ ")"
   | MatchSet (t, exp1, exp2, set_clause) -> "MatchSet (" ^ string_of_txtLoc_t t ^ (string_of_exp exp1) ^ 
   (string_of_exp exp2) ^
   (string_of_set_clause set_clause) ^ ")"
@@ -112,7 +112,7 @@ let rec string_of_exp e =
     | Pvar pat0 -> "Pvar (" ^ string_of_pat0 pat0 ^ ")"
     | Ptuple pat0_list -> "Ptuple (" ^ String.concat " " ((List.map string_of_pat0) pat0_list) ^ ")"
 
-  and string_of_pat0 p = Option.get p
+  and string_of_pat0 p = Option.value p
 
   and string_of_variant_cond vc =
   match vc with
@@ -156,7 +156,7 @@ let string_of_test_type tt =
   
 let string_of_app_test (t, pos, test, exp, string_op) = 
     string_of_txtLoc_t t ^ string_of_pos pos ^ string_of_test test ^ string_of_exp exp 
-    ^ Option.get string_op
+    ^ (Option.value string_op)
 
 let string_of_is_rec r = 
   match r with 
@@ -167,10 +167,10 @@ let rec string_of_ins i =
   match i with
     | Let (t, binding_list) -> "Let (" ^ string_of_txtLoc_t t ^ string_of_binding_list binding_list ^ ")"
     | Rec (t, binding_list, app_test_option) -> "Rec (" ^ string_of_txtLoc_t t ^ 
-    (string_of_binding_list binding_list) ^ (Option.get app_test_option |> string_of_app_test) ^ ")"
+    (string_of_binding_list binding_list) ^ (Option.value app_test_option |> string_of_app_test) ^ ")"
     | InsMatch (t, exp, insclause_list, ins_list_option)  -> "InsMatch (" ^ string_of_txtLoc_t t
      ^ string_of_exp exp ^ String.concat " " ((List.map string_of_insclause) insclause_list) 
-     ^ (Option.get ins_list_option |> string_of_ins_list) ^ ")"
+     ^ (Option.value ins_list_option |> string_of_ins_list) ^ ")"
     | Test (app_test, test_type) -> "Test (" ^ string_of_app_test app_test ^ string_of_test_type test_type ^ ")"
     | UnShow (t, string_list) -> "UnShow (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
     | Show (t, string_list) -> "Show (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
@@ -178,46 +178,24 @@ let rec string_of_ins i =
     | Include (t, string) -> "Include (" ^ string_of_txtLoc_t t ^ string ^ ")"
     | Procedure (t, var, pat, ins_list, is_rec) -> "Procedure (" ^ string_of_txtLoc_t t ^ var 
     ^ string_of_pat pat ^ string_of_ins_list ins_list ^ string_of_is_rec is_rec ^ ")"
-    | Call (t, var, exp, string_option) -> " (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
-    ^ Option.get string_option ^ ")"
-    | Enum (t, var, tag_list) -> " (" ^ string_of_txtLoc_t t ^ var 
-    ^ String.concat " " ((List.map string_of_tag) tag_list) ^ ")"
-    | Forall (t, var, exp, ins_list) -> " (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
+    | Call (t, var, exp, string_option) -> "Call (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
+    ^ Option.value string_option ^ ")"
+    | Enum (t, var, tag_list) -> "Enum (" ^ string_of_txtLoc_t t ^ var 
+    ^ String.concat " " tag_list ^ ")"
+    | Forall (t, var, exp, ins_list) -> "Forall (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
     ^ string_of_ins_list ins_list ^ ")"
-    | Debug (t, exp) -> " (" ^ string_of_txtLoc_t t ^ string_of_exp exp ^ ")"
-    | WithFrom (t, var, exp) -> " (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp ^ ")"
-    | Events (t, var, exp_list, bool) -> " (" ^ string_of_txtLoc_t t 
+    | Debug (t, exp) -> "Debug (" ^ string_of_txtLoc_t t ^ string_of_exp exp ^ ")"
+    | WithFrom (t, var, exp) -> "WithFrom (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp ^ ")"
+    | Events (t, var, exp_list, bool) -> "Events (" ^ string_of_txtLoc_t t ^ var
     ^ String.concat " " ((List.map string_of_exp) exp_list) ^ string_of_bool bool ^ ")"
-    | IfVariant (t, variant_cond, ins_list1, ins_list2) -> " (" ^ string_of_txtLoc_t t ^ string_of_variant_cond variant_cond 
+    | IfVariant (t, variant_cond, ins_list1, ins_list2) -> "IfVariant (" ^ string_of_txtLoc_t t ^ string_of_variant_cond variant_cond 
     ^ string_of_ins_list ins_list1 ^ string_of_ins_list ins_list2 ^ ")"
 
     and string_of_ins_list il = String.concat " " ((List.map string_of_ins) il)
 
     and string_of_insclause (string, ins_list) = string ^ string_of_ins_list ins_list
-  (*
-  type ins =
-    | Let of TxtLoc.t * binding list
-    | Rec of  TxtLoc.t * binding list * app_test option
-    | InsMatch of TxtLoc.t * exp * insclause list * ins list option
-    | Test of  app_test * test_type
-    | UnShow of  TxtLoc.t * string list
-    | Show of  TxtLoc.t * string list
-    | ShowAs of  TxtLoc.t * exp * string
-    | Include of  TxtLoc.t * string (* file name, interpreter will read/parse file... *)
-    | Procedure of  TxtLoc.t * var * pat * ins list * is_rec
-    | Call of  TxtLoc.t * var * exp * string option (* optional name, for skip *)
-    | Enum of TxtLoc.t * var * tag list
-    | Forall of  TxtLoc.t * var * exp * ins list
-    | Debug of TxtLoc.t * exp
-    | WithFrom of TxtLoc.t * var * exp (* set of relations *)
-  (*For bell files*)
-    | Events of TxtLoc.t * var * exp list * bool (* define default *)
-  (*Conditional, on variant as a string, avoiding dependency on herd/variant.ml *)
-    | IfVariant of TxtLoc.t * variant_cond * ins list * ins list
-  
-  and insclause = string * ins list
-  
-  
-  
-  (** Name X model definition *)
-  type t = ModelOption.t * string * ins list*)
+
+let string_of_t (t, string, ins_list) = 
+  ModelOption.pp t ^ string ^ string_of_ins_list ins_list
+
+let print_t t = Printf.printf "%s" (string_of_t t) 
