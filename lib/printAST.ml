@@ -53,26 +53,13 @@ let string_of_scope s =
 let string_of_position p =  "{pos_fname " ^ p.Lexing.pos_fname ^ "; pos_lnum " ^ (string_of_int p.Lexing.pos_lnum) ^
    "; pos_bol " ^ (string_of_int p.Lexing.pos_bol) ^ "; pos_cnum " ^ (string_of_int p.Lexing.pos_cnum) ^ ";}"
 
-let string_of_txtLoc_t t = " tLoc "
+let string_of_txtLoc_t _ = " tLoc "
   (*
   "{loc_start " ^ (string_of_position t.TxtLoc.loc_start) ^ "; loc_end " ^ (string_of_position t.TxtLoc.loc_end) ^
    "; loc_ghost" ^ string_of_bool t.TxtLoc.loc_ghost ^ ";}"*)
 
-(*   type position = {
-    pos_fname : string;
-    pos_lnum : int;
-    pos_bol : int;
-    pos_cnum : int;
-  }
-
-    type t = {
-      loc_start : Lexing.position ;
-      loc_end : Lexing.position ;
-      loc_ghost : bool ;
-      }*)
-
 let string_of_varset v = String.concat " " (StringSet.elements v)
-  
+
 let rec string_of_exp e =
   match e with
   | Konst (t, konst) -> "Konst (" ^ (string_of_txtLoc_t t) ^ (string_of_konst konst) ^ ")"
@@ -92,7 +79,7 @@ let rec string_of_exp e =
   | ExplicitSet (t, exp_list) -> "ExplicitSet (" ^ string_of_txtLoc_t t ^ 
    String.concat " " ((List.map string_of_exp) exp_list) ^ ")"
   | Match (t, exp, clause_list, exp_option) -> "Match (" ^ string_of_txtLoc_t t ^ (string_of_exp exp) ^ 
-  String.concat " " ((List.map string_of_clause) clause_list) ^ string_of_exp (Option.value exp_option) ^ ")"
+  String.concat " " ((List.map string_of_clause) clause_list) ^ String.concat " " ((List.map string_of_exp) (Option.to_list exp_option)) ^ ")"
   | MatchSet (t, exp1, exp2, set_clause) -> "MatchSet (" ^ string_of_txtLoc_t t ^ (string_of_exp exp1) ^ 
   (string_of_exp exp2) ^
   (string_of_set_clause set_clause) ^ ")"
@@ -112,7 +99,7 @@ let rec string_of_exp e =
     | Pvar pat0 -> "Pvar (" ^ string_of_pat0 pat0 ^ ")"
     | Ptuple pat0_list -> "Ptuple (" ^ String.concat " " ((List.map string_of_pat0) pat0_list) ^ ")"
 
-  and string_of_pat0 p = Option.value p
+  and string_of_pat0 p = String.concat " " (Option.to_list p)
 
   and string_of_variant_cond vc =
   match vc with
@@ -156,7 +143,7 @@ let string_of_test_type tt =
   
 let string_of_app_test (t, pos, test, exp, string_op) = 
     string_of_txtLoc_t t ^ string_of_pos pos ^ string_of_test test ^ string_of_exp exp 
-    ^ (Option.value string_op)
+    ^ String.concat " " (Option.to_list string_op)
 
 let string_of_is_rec r = 
   match r with 
@@ -167,10 +154,11 @@ let rec string_of_ins i =
   match i with
     | Let (t, binding_list) -> "Let (" ^ string_of_txtLoc_t t ^ string_of_binding_list binding_list ^ ")"
     | Rec (t, binding_list, app_test_option) -> "Rec (" ^ string_of_txtLoc_t t ^ 
-    (string_of_binding_list binding_list) ^ (Option.value app_test_option |> string_of_app_test) ^ ")"
+    (string_of_binding_list binding_list) 
+    ^ String.concat " " ((List.map string_of_app_test) (Option.to_list app_test_option)) ^ ")"
     | InsMatch (t, exp, insclause_list, ins_list_option)  -> "InsMatch (" ^ string_of_txtLoc_t t
      ^ string_of_exp exp ^ String.concat " " ((List.map string_of_insclause) insclause_list) 
-     ^ (Option.value ins_list_option |> string_of_ins_list) ^ ")"
+     ^ String.concat " " ((List.map string_of_ins_list) (Option.to_list ins_list_option)) ^ ")"
     | Test (app_test, test_type) -> "Test (" ^ string_of_app_test app_test ^ string_of_test_type test_type ^ ")"
     | UnShow (t, string_list) -> "UnShow (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
     | Show (t, string_list) -> "Show (" ^ string_of_txtLoc_t t ^ String.concat " " string_list ^ ")"
@@ -179,7 +167,7 @@ let rec string_of_ins i =
     | Procedure (t, var, pat, ins_list, is_rec) -> "Procedure (" ^ string_of_txtLoc_t t ^ var 
     ^ string_of_pat pat ^ string_of_ins_list ins_list ^ string_of_is_rec is_rec ^ ")"
     | Call (t, var, exp, string_option) -> "Call (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
-    ^ Option.value string_option ^ ")"
+    ^ String.concat " " (Option.to_list string_option) ^ ")"
     | Enum (t, var, tag_list) -> "Enum (" ^ string_of_txtLoc_t t ^ var 
     ^ String.concat " " tag_list ^ ")"
     | Forall (t, var, exp, ins_list) -> "Forall (" ^ string_of_txtLoc_t t ^ var ^ string_of_exp exp 
