@@ -174,7 +174,8 @@ module Make
 (*  Model interpret *)
     let (_,_,mprog) = O.m
 
-    let () = PrintAST.print_t O.m
+    let () = PrintASTJSON.print_t O.m; Printf.printf "Dune build worked!"
+
 (* Debug printing *)
 
     let _debug_proc chan p = fprintf chan "%i" p
